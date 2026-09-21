@@ -722,6 +722,70 @@ func TestDashifyDashboardSpecAllowsMissingLayout(t *testing.T) {
 	assert.Equal(t, "chart-id", model.Container[0].Template.TemplateID.ValueString())
 }
 
+func TestDashifyDashboardSpecDropsNullContainerTombstones(t *testing.T) {
+	t.Parallel()
+
+	root := template.RootElementDashboard
+	spec := json.RawMessage(`{
+		"title":"Dashboard",
+		"<Dashboard>":[
+			{"<Panel>":[{"<$import.widget0>":[]}]},
+			null,
+			{"<Panel>":[{"<$import.widget2>":[]}]},
+			null
+		],
+		"layout":{"saved":{"_":{"items":[
+			{"id":"_.0","h":10},
+			{"id":"_.1","h":20},
+			{"id":"_.2","h":30},
+			{"id":"_.3","h":40}
+		]}}},
+		"$import:widget0":"/v2/template/chart-a",
+		"$import:widget2":"/v2/template/chart-b"
+	}`)
+	model, diags := parseDashboardTemplate(&template.Template{
+		Type:     template.RecordType,
+		Title:    "Dashboard",
+		Spec:     spec,
+		Metadata: &template.Metadata{RootElement: &root},
+	})
+	require.False(t, diags.HasError(), diags)
+	require.Len(t, model.Container, 2)
+	assert.Equal(t, "chart-a", model.Container[0].Template.TemplateID.ValueString())
+	assert.Equal(t, "10", model.Container[0].Layout.Height.ValueString())
+	assert.Equal(t, "chart-b", model.Container[1].Template.TemplateID.ValueString())
+	assert.Equal(t, "30", model.Container[1].Layout.Height.ValueString())
+
+	warnings := diags.Warnings()
+	require.Len(t, warnings, 1)
+	assert.Equal(t, "Dashboard fields not represented in Terraform state", warnings[0].Summary())
+	assert.Contains(t, warnings[0].Detail(), "container.1 (null element; matching layout _.1 omitted)")
+	assert.Contains(t, warnings[0].Detail(), "container.3 (null element; matching layout _.3 omitted)")
+
+	// A subsequent update removes the tombstones, compacts the surviving
+	// container IDs, and preserves each surviving container's layout.
+	rebuilt, _, err := buildDashboardSpec(model)
+	require.NoError(t, err)
+	var rebuiltSpec map[string]any
+	require.NoError(t, json.Unmarshal(rebuilt, &rebuiltSpec))
+	rebuiltChildren := rebuiltSpec[dashifyDashboardElement].([]any)
+	require.Len(t, rebuiltChildren, 2)
+	rebuiltItems := rebuiltSpec["layout"].(map[string]any)["saved"].(map[string]any)["_"].(map[string]any)["items"].([]any)
+	require.Len(t, rebuiltItems, 2)
+	assert.Equal(t, "_.0", rebuiltItems[0].(map[string]any)["id"])
+	assert.Equal(t, float64(10), rebuiltItems[0].(map[string]any)["h"])
+	assert.Equal(t, "_.1", rebuiltItems[1].(map[string]any)["id"])
+	assert.Equal(t, float64(30), rebuiltItems[1].(map[string]any)["h"])
+
+	_, reparsedDiags := parseDashboardTemplate(&template.Template{
+		Type:     template.RecordType,
+		Title:    "Dashboard",
+		Spec:     rebuilt,
+		Metadata: &template.Metadata{RootElement: &root},
+	})
+	assert.Empty(t, reparsedDiags, reparsedDiags)
+}
+
 func TestDashifyDashboardSpecAllowsUntitledSectionsAndGroups(t *testing.T) {
 	t.Parallel()
 

@@ -212,13 +212,7 @@ func parseDashboardTemplate(record *template.Template) (observabilityDashboardMo
 		return model, formatDashboardParseError(err)
 	}
 	model.Title = types.StringValue(record.Title)
-	if title, ok := spec["title"]; ok {
-		if titleValue, ok := title.(string); !ok {
-			return model, formatDashboardParseError(fmt.Errorf("spec.title is %T rather than a string", title))
-		} else if titleValue != record.Title {
-			return model, unsupportedDashboardSpec(fmt.Sprintf("record title %q conflicts with spec.title %q", record.Title, titleValue))
-		}
-	}
+	// spec.title duplicates the record title and has no Terraform model field.
 	delete(spec, "title")
 	controlBar, controlLeftovers, err := parseDashifyControlBar(spec)
 	if err != nil {
@@ -273,16 +267,26 @@ func parseDashifyContainerList(spec map[string]any, used map[string]bool, listKe
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("layout %q: %w", listKey, err)
 	}
-	containers := make([]dashifyContainer, len(children))
+	// The UI can leave null entries behind when a dashboard container is
+	// removed. Treat those entries and their matching layout items as
+	// tombstones: Terraform cannot represent them, but the remaining containers
+	// are still safe to import. Keep the original positional ID while parsing so
+	// surviving sections and groups retain their matching saved layout metadata;
+	// buildDashboardSpec compacts them when it writes the document back.
+	containers := make([]dashifyContainer, 0, len(children))
 	for i, child := range children {
 		id := fmt.Sprintf("%s.%d", listKey, i)
 		containerPath := fmt.Sprintf("%s.%d", path, i)
+		if child == nil {
+			leftovers = append(leftovers, fmt.Sprintf("%s (null element; matching layout %s omitted)", containerPath, id))
+			continue
+		}
 		container, containerLeftovers, err := parseDashifyContainer(spec, used, id, containerPath, child, level)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("container %s: %w", id, err)
 		}
 		container.Layout = layouts[i]
-		containers[i] = container
+		containers = append(containers, container)
 		leftovers = append(leftovers, containerLeftovers...)
 	}
 	return containers, metadata, leftovers, nil

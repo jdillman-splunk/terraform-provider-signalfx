@@ -3,6 +3,8 @@
 IMPROVEMENTS:
 
 * Added Observability Template, Directory, and reference-based Dashboard resources, including dashboard layout, control-bar configuration, and ordered Directory Template membership.
+* `signalfx_observability_dashboard` now ignores the unmodeled `spec.title` field when reading dashboards. Differences from the record title, including non-string values, no longer block imports or produce diagnostics.
+* `signalfx_observability_dashboard` now imports dashboards containing `null` container tombstones left by the UI. The provider omits each tombstone and its matching layout item, compacts surviving containers on the next update, and warns about the lossy normalization.
 
 ## 9.7.2
 
