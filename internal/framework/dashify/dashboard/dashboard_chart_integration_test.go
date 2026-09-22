@@ -524,48 +524,6 @@ func TestDashifyDashboardAllSixChartsAtEveryLegalPanelLevel(t *testing.T) {
 		}
 	}
 }
-func TestDashifyChartValidationPathPreservesDottedMapKeys(t *testing.T) {
-	t.Parallel()
-
-	tests := map[string]struct {
-		entry    charts.Entry
-		relative string
-		want     path.Path
-	}{
-		"time-series series": {
-			entry: charts.Entry{
-				Name: charts.MetricsTimeSeriesName,
-				Content: &charts.MetricsTimeSeriesModel{Series: map[string]charts.MetricsTimeSeriesSeriesModel{
-					"latency.p99": {},
-				}},
-			},
-			relative: "series.latency.p99.y_axis",
-			want: path.Root("container").AtListIndex(0).AtName(charts.MetricsTimeSeriesName).
-				AtName("series").AtMapKey("latency.p99").AtName("y_axis"),
-		},
-		"list published stream": {
-			entry: charts.Entry{
-				Name: charts.MetricsListName,
-				Content: &charts.MetricsListModel{PublishedStreams: map[string]charts.MetricsListPublishedStreamsModel{
-					"latency.p99": {},
-				}},
-			},
-			relative: "published_streams.latency.p99.palette_index",
-			want: path.Root("container").AtListIndex(0).AtName(charts.MetricsListName).
-				AtName("published_streams").AtMapKey("latency.p99").AtName("palette_index"),
-		},
-	}
-
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			base := path.Root("container").AtListIndex(0).AtName(test.entry.Name)
-			got := dashifyChartValidationPath(base, test.relative, dashifyChartMapKeys(test.entry.Content))
-			assert.True(t, test.want.Equal(got), "got %s, want %s", got.String(), test.want.String())
-		})
-	}
-}
-
 func TestValidateDashifyContainersIncludesGeneratedChartsInExactlyOneRule(t *testing.T) {
 	t.Parallel()
 
@@ -618,10 +576,11 @@ func TestValidateDashifyContainersIncludesGeneratedChartsInExactlyOneRule(t *tes
 		)
 		require.Len(t, response.Diagnostics.Errors(), 1)
 		assert.Equal(t, "Invalid chart configuration", response.Diagnostics.Errors()[0].Summary())
+		assert.Contains(t, response.Diagnostics.Errors()[0].Detail(), "program")
 		assert.Contains(t, response.Diagnostics.Errors()[0].Detail(), "must be set")
 		withPath, ok := response.Diagnostics.Errors()[0].(diag.DiagnosticWithPath)
 		require.True(t, ok)
-		want := path.Root("container").AtListIndex(0).AtName(charts.MetricsTimeSeriesName).AtName("program")
+		want := path.Root("container").AtListIndex(0).AtName(charts.MetricsTimeSeriesName)
 		assert.True(t, want.Equal(withPath.Path()), "got %s, want %s", withPath.Path().String(), want.String())
 	})
 
@@ -641,10 +600,11 @@ func TestValidateDashifyContainersIncludesGeneratedChartsInExactlyOneRule(t *tes
 		)
 		require.Len(t, response.Diagnostics.Errors(), 1)
 		assert.Equal(t, "Invalid chart configuration", response.Diagnostics.Errors()[0].Summary())
+		assert.Contains(t, response.Diagnostics.Errors()[0].Detail(), "program")
 		assert.Contains(t, response.Diagnostics.Errors()[0].Detail(), "at least 1")
 		withPath, ok := response.Diagnostics.Errors()[0].(diag.DiagnosticWithPath)
 		require.True(t, ok)
-		want := path.Root("container").AtListIndex(0).AtName(charts.MetricsTimeSeriesName).AtName("program")
+		want := path.Root("container").AtListIndex(0).AtName(charts.MetricsTimeSeriesName)
 		assert.True(t, want.Equal(withPath.Path()), "got %s, want %s", withPath.Path().String(), want.String())
 	})
 }

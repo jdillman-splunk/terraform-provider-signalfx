@@ -9,9 +9,7 @@ package dashboard
 
 import (
 	"fmt"
-	"reflect"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/float64validator"
@@ -302,89 +300,16 @@ func validateDashifyChart(resp *resource.ValidateConfigResponse, containerPath p
 		return errors[i].Message < errors[j].Message
 	})
 	for _, validationErr := range errors {
+		detail := validationErr.Message
+		if validationErr.Path != "" {
+			detail = validationErr.Path + ": " + detail
+		}
 		resp.Diagnostics.AddAttributeError(
-			dashifyChartValidationPath(chartPath, validationErr.Path, dashifyChartMapKeys(entry.Content)),
+			chartPath,
 			"Invalid chart configuration",
-			validationErr.Message,
+			detail,
 		)
 	}
-}
-
-// dashifyChartMapKeys reports the keys set on every map-typed attribute of a
-// chart model, keyed by tfsdk attribute name. Reflection keeps this in step with
-// the generated chart schemas: a map attribute added to charts/schemas/*.yml
-// cannot fall out of validation paths the way a hand-listed set would. Keys sort
-// longest-first so a dotted key wins over a shorter key that prefixes it.
-func dashifyChartMapKeys(content charts.Content) map[string][]string {
-	keys := map[string][]string{}
-	collectDashifyMapKeys(reflect.ValueOf(content), keys)
-	for _, values := range keys {
-		sort.Slice(values, func(i, j int) bool {
-			if len(values[i]) != len(values[j]) {
-				return len(values[i]) > len(values[j])
-			}
-			return values[i] < values[j]
-		})
-	}
-	return keys
-}
-
-func collectDashifyMapKeys(value reflect.Value, keys map[string][]string) {
-	switch value.Kind() {
-	case reflect.Pointer, reflect.Interface:
-		if !value.IsNil() {
-			collectDashifyMapKeys(value.Elem(), keys)
-		}
-	case reflect.Struct:
-		for i := range value.NumField() {
-			field := value.Type().Field(i)
-			if !field.IsExported() {
-				continue
-			}
-			name, tagged := field.Tag.Lookup("tfsdk")
-			if entry := value.Field(i); tagged && entry.Kind() == reflect.Map {
-				for _, key := range entry.MapKeys() {
-					keys[name] = append(keys[name], key.String())
-				}
-			}
-			collectDashifyMapKeys(value.Field(i), keys)
-		}
-	case reflect.Slice:
-		for i := range value.Len() {
-			collectDashifyMapKeys(value.Index(i), keys)
-		}
-	case reflect.Map:
-		for _, key := range value.MapKeys() {
-			collectDashifyMapKeys(value.MapIndex(key), keys)
-		}
-	}
-}
-
-// dashifyChartValidationPath turns a chart-relative validation path such as
-// "series.latency.p99.y_axis" into a schema path. Generated code joins map keys
-// with the same "." it uses between attributes, so mapKeys supplies the keys
-// actually present to resolve where a key ends.
-func dashifyChartValidationPath(base path.Path, relative string, mapKeys map[string][]string) path.Path {
-	current := base
-	remaining := relative
-	for remaining != "" {
-		segment, rest, _ := strings.Cut(remaining, ".")
-		if index, err := strconv.Atoi(segment); err == nil {
-			current = current.AtListIndex(index)
-			remaining = rest
-			continue
-		}
-		current = current.AtName(segment)
-		remaining = rest
-		for _, key := range mapKeys[segment] {
-			if remaining == key || strings.HasPrefix(remaining, key+".") {
-				current = current.AtMapKey(key)
-				remaining = strings.TrimPrefix(strings.TrimPrefix(remaining, key), ".")
-				break
-			}
-		}
-	}
-	return current
 }
 
 func validateDashifyLayout(resp *resource.ValidateConfigResponse, layoutPath path.Path, layout *dashifyLayoutModel) {
