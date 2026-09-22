@@ -1,0 +1,103 @@
+# Copyright Splunk, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
+type: metrics_example
+version: 1
+description: Configuration for the example element.
+dashify:
+    element:
+        name: o11y:Example
+        args: []
+properties:
+    caption:
+        type: string
+        optional: true
+        description: Optional example caption.
+        mapping:
+            path:
+                - caption
+    enabled:
+        type: bool
+        required: true
+        description: Whether the example is enabled.
+        mapping:
+            path:
+                - enabled
+    entries:
+        type: list
+        optional: true
+        description: Ordered example entries.
+        mapping:
+            path:
+                - entries
+        item:
+            properties:
+                label:
+                    type: string
+                    required: true
+                    description: Human-readable entry label.
+                    mapping:
+                        path:
+                            - label
+    mode:
+        type: enum
+        optional: true
+        values:
+            - compact
+            - expanded
+        description: Example operating mode.
+        mapping:
+            path:
+                - mode
+    named_entries:
+        type: map
+        optional: true
+        description: Example entries keyed by name.
+        mapping:
+            path:
+                - namedEntries
+        item:
+            properties:
+                label:
+                    type: string
+                    required: true
+                    description: Human-readable entry label.
+                    mapping:
+                        path:
+                            - label
+    size:
+        type: oneof
+        optional: true
+        description: Named or numeric example size.
+        mapping:
+            path:
+                - size
+        variants:
+            float:
+                type: float
+                description: Named or numeric example size.
+            string:
+                type: string
+                description: Named or numeric example size.
+    widget:
+        type: block
+        required: true
+        description: Widget presentation settings.
+        mapping:
+            path:
+                - widget
+        properties:
+            threshold:
+                type: float
+                optional: true
+                description: Optional numeric threshold.
+                mapping:
+                    path:
+                        - threshold
+            title:
+                type: string
+                required: true
+                description: Widget title.
+                mapping:
+                    path:
+                        - title

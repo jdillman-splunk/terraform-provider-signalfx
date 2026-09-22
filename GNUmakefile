@@ -87,10 +87,10 @@ test-compile:
 generate-charts: write-generated-charts
 
 write-generated-charts:
-	GOWORK=off go run ./internal/framework/observability/chartgen -mode=write
+	GOWORK=off go run ./internal/framework/dashify/chartgen -mode=write
 
 check-generated-charts:
-	GOWORK=off go run ./internal/framework/observability/chartgen -mode=check
+	GOWORK=off go run ./internal/framework/dashify/chartgen -mode=check
 
 check-docs: gen-docs
 	@if [ "`git status --porcelain docs/`" ];then \

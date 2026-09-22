@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schema.example.test/o11y-example.json",
+  "title": "o11y:Example",
+  "description": "Configuration for the example element.",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "Entry": {
+      "description": "One configured entry.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "description": "Human-readable entry label.",
+          "type": "string"
+        }
+      },
+      "required": ["label"]
+    },
+    "Widget": {
+      "description": "Widget presentation settings.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "legacyColor": {
+          "description": "Deprecated color override.",
+          "type": "string",
+          "deprecated": true
+        },
+        "threshold": {
+          "description": "Optional numeric threshold.",
+          "type": ["number", "null"]
+        },
+        "title": {
+          "description": "Widget title.",
+          "type": "string"
+        }
+      },
+      "required": ["title"]
+    }
+  },
+  "properties": {
+    "caption": {
+      "description": "Optional example caption.",
+      "anyOf": [
+        {"type": "string"},
+        {"type": "null"}
+      ]
+    },
+    "enabled": {
+      "description": "Whether the example is enabled.",
+      "type": "boolean"
+    },
+    "entries": {
+      "description": "Ordered example entries.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Entry"
+      }
+    },
+    "mode": {
+      "description": "Example operating mode.",
+      "type": "string",
+      "enum": ["compact", "expanded"]
+    },
+    "namedEntries": {
+      "description": "Example entries keyed by name.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/Entry"
+      }
+    },
+    "size": {
+      "description": "Named or numeric example size.",
+      "type": ["string", "number"]
+    },
+    "widget": {
+      "$ref": "#/$defs/Widget"
+    }
+  },
+  "required": ["enabled", "widget"]
+}

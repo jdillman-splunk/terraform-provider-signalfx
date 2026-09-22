@@ -1,0 +1,19 @@
+# Copyright Splunk, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
+version: 1
+properties:
+    threshold:
+        type: float
+        optional: true
+        description: Optional numeric threshold.
+        mapping:
+            path:
+                - threshold
+    title:
+        type: string
+        required: true
+        description: Widget title.
+        mapping:
+            path:
+                - title

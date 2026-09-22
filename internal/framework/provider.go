@@ -30,7 +30,6 @@ import (
 	fwdetector "github.com/splunk-terraform/terraform-provider-signalfx/internal/framework/detector"
 	internalfunction "github.com/splunk-terraform/terraform-provider-signalfx/internal/framework/function"
 	fwintegration "github.com/splunk-terraform/terraform-provider-signalfx/internal/framework/integration"
-	fwobservability "github.com/splunk-terraform/terraform-provider-signalfx/internal/framework/observability"
 	fwtimestamp "github.com/splunk-terraform/terraform-provider-signalfx/internal/framework/timestamp"
 	pmeta "github.com/splunk-terraform/terraform-provider-signalfx/internal/providermeta"
 	tfext "github.com/splunk-terraform/terraform-provider-signalfx/internal/tfextension"
@@ -291,9 +290,9 @@ func (op *ollyProvider) Resources(ctx context.Context) []func() resource.Resourc
 		fwdashify.NewResourceDashifyTemplate,
 		fwdetector.NewAutoDetectorResource,
 		fwintegration.NewResourceBigPanda,
-		fwobservability.NewResourceObservabilityDashboard,
-		fwobservability.NewResourceObservabilityDirectory,
-		fwobservability.NewResourceObservabilityTemplate,
+		fwdashify.NewResourceObservabilityDashboard,
+		fwdashify.NewResourceObservabilityDirectory,
+		fwdashify.NewResourceObservabilityTemplate,
 	}
 }
 
