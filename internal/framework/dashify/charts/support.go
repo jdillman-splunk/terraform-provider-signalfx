@@ -4,7 +4,7 @@
 //go:generate go run ../chartgen -mode=write -repo-root=../../../..
 
 // Hand-written, not generated - see the *_generated.go files in this same
-// package for what observability/chartgen actually produces. This file contains
+// package for what dashify/chartgen actually produces. This file contains
 // fixed parsing, normalization, validation, and document helpers shared by
 // every generated chart.
 package charts
@@ -33,137 +33,9 @@ type normalizationRule struct {
 	Suffix []string
 }
 
-// contractNode is the compact validation vocabulary chartgen emits from the
-// pinned Olly JSON Schemas. It deliberately contains only compiled Go data;
-// provider runtime never reads or interprets JSON Schema files.
-type contractNode struct {
-	Kinds           []string
-	Enum            []string
-	Properties      map[string]*contractNode
-	Required        []string
-	Additional      *contractNode
-	AllowAdditional bool
-	Items           *contractNode
-	AnyOf           []*contractNode
-	Deprecated      bool
-}
-
-func validateElementContract(tag string, spec map[string]any) []ValidationError {
-	contract := contractForElement(tag)
-	if contract == nil {
-		return []ValidationError{{Message: "has no generated Olly contract"}}
-	}
-	properties := cloneSpecMap(spec)
-	args, exists := properties[tag]
-	if !exists {
-		return []ValidationError{{Path: tag, Message: "element marker must be present"}}
-	}
-	argumentList, validArgs := args.([]any)
-	if !validArgs || len(argumentList) != 0 {
-		return []ValidationError{{Path: tag, Message: "element marker must contain an empty argument list"}}
-	}
-	delete(properties, tag)
-	return validateContractNode("", properties, contract)
-}
-
-func validateContractNode(path string, value any, node *contractNode) []ValidationError {
-	if len(node.AnyOf) > 0 {
-		matched := false
-		for _, alternative := range node.AnyOf {
-			if len(validateContractNode(path, value, alternative)) == 0 {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			return []ValidationError{{Path: path, Message: "does not match any allowed Olly contract shape"}}
-		}
-	}
-	if len(node.Kinds) > 0 && !contractKindMatches(value, node.Kinds) {
-		return []ValidationError{{Path: path, Message: fmt.Sprintf("must be %s, got %T", strings.Join(node.Kinds, " or "), value)}}
-	}
-	if len(node.Enum) > 0 {
-		text, ok := value.(string)
-		if !ok || !containsString(node.Enum, text) {
-			return []ValidationError{{Path: path, Message: "must be one of " + strings.Join(node.Enum, ", ")}}
-		}
-	}
-
-	var errors []ValidationError
-	if object, ok := value.(map[string]any); ok {
-		for _, required := range node.Required {
-			if _, exists := object[required]; !exists {
-				errors = append(errors, ValidationError{Path: validationPath(path, required), Message: "must be set by the Olly contract"})
-			}
-		}
-		for _, name := range sortedMapKeys(object) {
-			childPath := validationPath(path, name)
-			if property := node.Properties[name]; property != nil {
-				errors = append(errors, validateContractNode(childPath, object[name], property)...)
-				continue
-			}
-			if node.Additional != nil {
-				errors = append(errors, validateContractNode(childPath, object[name], node.Additional)...)
-				continue
-			}
-			if !node.AllowAdditional {
-				errors = append(errors, ValidationError{Path: childPath, Message: "is not allowed by the Olly contract"})
-			}
-		}
-	}
-	if array, ok := value.([]any); ok && node.Items != nil {
-		for index, item := range array {
-			errors = append(errors, validateContractNode(validationPath(path, strconv.Itoa(index)), item, node.Items)...)
-		}
-	}
-	return errors
-}
-
-func contractKindMatches(value any, kinds []string) bool {
-	for _, kind := range kinds {
-		switch kind {
-		case "null":
-			if value == nil {
-				return true
-			}
-		case "object":
-			if _, ok := value.(map[string]any); ok {
-				return true
-			}
-		case "array":
-			if _, ok := value.([]any); ok {
-				return true
-			}
-		case "string":
-			if _, ok := value.(string); ok {
-				return true
-			}
-		case "boolean":
-			if _, ok := value.(bool); ok {
-				return true
-			}
-		case "number":
-			_, numeric, valid := exactNumber(value)
-			if numeric && valid {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func float32IsInvalid(value float32) bool {
 	converted := float64(value)
 	return math.IsNaN(converted) || math.IsInf(converted, 0)
-}
-
-func containsString(values []string, wanted string) bool {
-	for _, value := range values {
-		if value == wanted {
-			return true
-		}
-	}
-	return false
 }
 
 func cloneSpecMap(source map[string]any) map[string]any {

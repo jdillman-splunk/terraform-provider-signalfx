@@ -93,9 +93,7 @@ func ParseContent(tag string, spec map[string]any) (Entry, ParseMetadata, error)
 	if !ok {
 		return Entry{}, metadata, fmt.Errorf("unsupported chart element %q", tag)
 	}
-	original := cloneSpecMap(spec)
-	metadata.ValidationErrors = append(metadata.ValidationErrors, validateElementContract(tag, original)...)
-	normalized := cloneSpecMap(original)
+	normalized := cloneSpecMap(spec)
 	normalizations, err := applyNormalizations(normalized, normalizationRules(tag))
 	if err != nil {
 		return Entry{}, metadata, err

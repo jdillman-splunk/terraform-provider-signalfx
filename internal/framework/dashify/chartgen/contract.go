@@ -6,7 +6,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"go/format"
 	"os"
 	"path/filepath"
 	"sort"
@@ -14,8 +13,7 @@ import (
 )
 
 // contractNode is chartgen's build-time representation of the JSON Schema
-// vocabulary used by the pinned Olly contracts. It is emitted as plain Go
-// data; provider runtime never reads or compiles JSON Schema.
+// vocabulary used by the pinned Olly contracts.
 type contractNode struct {
 	Kinds           []string
 	Enum            []string
@@ -364,72 +362,6 @@ func sortedAnyKeys(values map[string]any) []string {
 	return keys
 }
 
-func generateContractRegistry(charts []chartInfo, contracts map[string]*contractNode, packageName string) (string, error) {
-	var b strings.Builder
-	b.WriteString("// Copyright Splunk, Inc.\n// SPDX-License-Identifier: MPL-2.0\n\n")
-	fmt.Fprintf(&b, "// %s from %s/elements/*.schema.json; DO NOT EDIT.\n\n", generatedCodeMarker, chartSchemasPath)
-	fmt.Fprintf(&b, "package %s\n\n", packageName)
-	b.WriteString("func contractForElement(tag string) *contractNode {\n\tswitch tag {\n")
-	for _, chart := range charts {
-		fmt.Fprintf(&b, "\tcase %q:\n\t\treturn ", chart.ElementTag)
-		writeContractNode(&b, contracts[chart.ElementTag])
-		b.WriteString("\n")
-	}
-	b.WriteString("\tdefault:\n\t\treturn nil\n\t}\n}\n")
-	formatted, err := format.Source([]byte(b.String()))
-	if err != nil {
-		return "", fmt.Errorf("generated contract registry does not compile: %w\n\n%s", err, b.String())
-	}
-	return string(formatted), nil
-}
-
-func writeContractNode(b *strings.Builder, node *contractNode) {
-	b.WriteString("&contractNode{")
-	if len(node.Kinds) > 0 {
-		fmt.Fprintf(b, "Kinds: []string{%s},", quotedStrings(node.Kinds))
-	}
-	if len(node.Enum) > 0 {
-		fmt.Fprintf(b, "Enum: []string{%s},", quotedStrings(node.Enum))
-	}
-	if len(node.Properties) > 0 {
-		b.WriteString("Properties: map[string]*contractNode{")
-		for _, name := range sortedContractKeys(node.Properties) {
-			fmt.Fprintf(b, "%q:", name)
-			writeContractNode(b, node.Properties[name])
-			b.WriteString(",")
-		}
-		b.WriteString("},")
-	}
-	if len(node.Required) > 0 {
-		fmt.Fprintf(b, "Required: []string{%s},", quotedStrings(node.Required))
-	}
-	if node.Additional != nil {
-		b.WriteString("Additional:")
-		writeContractNode(b, node.Additional)
-		b.WriteString(",")
-	}
-	if node.AllowAdditional {
-		b.WriteString("AllowAdditional:true,")
-	}
-	if node.Items != nil {
-		b.WriteString("Items:")
-		writeContractNode(b, node.Items)
-		b.WriteString(",")
-	}
-	if len(node.AnyOf) > 0 {
-		b.WriteString("AnyOf:[]*contractNode{")
-		for _, alternative := range node.AnyOf {
-			writeContractNode(b, alternative)
-			b.WriteString(",")
-		}
-		b.WriteString("},")
-	}
-	if node.Deprecated {
-		b.WriteString("Deprecated:true,")
-	}
-	b.WriteString("}")
-}
-
 func sortedContractKeys(values map[string]*contractNode) []string {
 	keys := make([]string, 0, len(values))
 	for key := range values {
@@ -437,12 +369,4 @@ func sortedContractKeys(values map[string]*contractNode) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-func quotedStrings(values []string) string {
-	quoted := make([]string, len(values))
-	for index, value := range values {
-		quoted[index] = fmt.Sprintf("%q", value)
-	}
-	return strings.Join(quoted, ",")
 }

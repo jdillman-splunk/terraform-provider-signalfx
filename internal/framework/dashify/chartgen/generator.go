@@ -2248,9 +2248,7 @@ func generateContentAggregate(charts []chartInfo, packageName string) (string, e
 	b.WriteString("func ParseContent(tag string, spec map[string]any) (Entry, ParseMetadata, error) {\n")
 	b.WriteString("\tmetadata := ParseMetadata{ElementTag: tag}\n")
 	b.WriteString("\tname, ok := NameForElement(tag)\n\tif !ok { return Entry{}, metadata, fmt.Errorf(\"unsupported chart element %q\", tag) }\n")
-	b.WriteString("\toriginal := cloneSpecMap(spec)\n")
-	b.WriteString("\tmetadata.ValidationErrors = append(metadata.ValidationErrors, validateElementContract(tag, original)...)\n")
-	b.WriteString("\tnormalized := cloneSpecMap(original)\n")
+	b.WriteString("\tnormalized := cloneSpecMap(spec)\n")
 	b.WriteString("\tnormalizations, err := applyNormalizations(normalized, normalizationRules(tag))\n")
 	b.WriteString("\tif err != nil { return Entry{}, metadata, err }\n\tmetadata.Normalizations = normalizations\n")
 	b.WriteString("\tworking := cloneSpecMap(normalized)\n\tvar content Content\n")
@@ -2398,11 +2396,6 @@ func runGeneration(options generationOptions) error {
 	if witnessErr := validateMappingWitnesses(paths, options.SchemasDir, contracts); witnessErr != nil {
 		return witnessErr
 	}
-	contractSource, err := generateContractRegistry(charts, contracts, options.PackageName)
-	if err != nil {
-		return err
-	}
-	expected[filepath.Join(options.OutDir, "contract_generated.go")] = []byte(contractSource)
 	bridge, err := generateParentBridge(charts, options.BridgePackage, options.ChartsImport)
 	if err != nil {
 		return err

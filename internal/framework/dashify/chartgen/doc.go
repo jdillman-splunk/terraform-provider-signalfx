@@ -69,8 +69,8 @@
 //
 //  4. Regenerate: `make generate-charts`. This writes
 //     charts/metrics_pie_chart_generated.go and updates
-//     charts/content_generated.go, charts/contract_generated.go, and
-//     dashboard/dashboard_charts_generated.go. Don't hand-edit generated
+//     charts/content_generated.go and dashboard/dashboard_charts_generated.go.
+//     Don't hand-edit generated
 //     files; change the YAML and regenerate instead.
 //
 //  5. Check it: `make check-generated-charts` should report no diff, and

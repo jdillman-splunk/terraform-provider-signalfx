@@ -222,25 +222,6 @@ func TestAmbiguousLegacyDisplayUnitsRemainRaw(t *testing.T) {
 	}
 }
 
-func TestOriginalOllyContractIsValidatedBeforeNormalization(t *testing.T) {
-	spec := metricSpec("<o11y:List>", map[string]any{
-		"publishedStreams": map[string]any{
-			"A": map[string]any{"displayUnit": "Byte", "prefix": true},
-		},
-	})
-	entry, metadata, err := ParseContent("<o11y:List>", spec)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if metadata.TypedSafe() || !hasValidationPath(metadata.ValidationErrors, "chart.publishedStreams.A.prefix") {
-		t.Fatalf("metadata = %+v", metadata)
-	}
-	unit, ok := testPath(entry.Content.BuildSpec(), []string{"chart", "publishedStreams", "A", "displayUnit"})
-	if !ok || unit != "Byte" {
-		t.Fatalf("modern displayUnit did not retain precedence: %#v", entry.Content.BuildSpec())
-	}
-}
-
 func TestOmittedEmptyAndNullCollectionsStayDistinct(t *testing.T) {
 	omitted := metricSpec("<o11y:TimeSeriesChart>", map[string]any{})
 	entry, metadata, err := ParseContent("<o11y:TimeSeriesChart>", omitted)
@@ -286,7 +267,7 @@ func TestValidationCoversBoundsEnumsConflictsAndCrossFields(t *testing.T) {
 		spec map[string]any
 		path string
 	}{
-		{"enum", "<o11y:TimeSeriesChart>", metricSpec("<o11y:TimeSeriesChart>", map[string]any{"chartOptions": map[string]any{"type": "pie"}}), "chart.chartOptions.type"},
+		{"enum", "<o11y:TimeSeriesChart>", metricSpec("<o11y:TimeSeriesChart>", map[string]any{"chartOptions": map[string]any{"type": "pie"}}), "visualization"},
 		{"fraction precision below lower bound", "<o11y:SingleValue>", metricSpec("<o11y:SingleValue>", map[string]any{"maximumFractionDigits": int64(-1)}), "maximum_fraction_digits"},
 		{"fraction precision above upper bound", "<o11y:SingleValue>", metricSpec("<o11y:SingleValue>", map[string]any{"maximumFractionDigits": int64(21)}), "maximum_fraction_digits"},
 		{"significant precision below lower bound", "<o11y:ClusterMap>", metricSpec("<o11y:ClusterMap>", map[string]any{"maximumSignificantDigits": int64(0)}), "maximum_significant_digits"},
@@ -337,7 +318,7 @@ func TestValidationCoversBoundsEnumsConflictsAndCrossFields(t *testing.T) {
 	}
 }
 
-func TestUnknownAndInvalidOllyShapesNeverBecomeTypedState(t *testing.T) {
+func TestUnknownOllyShapesNeverBecomeTypedState(t *testing.T) {
 	validButUncurated := map[string]any{
 		"<o11y:Text>": []any{},
 		"chart":       map[string]any{"markdown": "notes"},
@@ -351,16 +332,6 @@ func TestUnknownAndInvalidOllyShapesNeverBecomeTypedState(t *testing.T) {
 	}
 	if metadata.TypedSafe() || len(metadata.Leftovers) == 0 || len(metadata.ValidationErrors) != 0 {
 		t.Fatalf("valid uncurated shape metadata = %+v", metadata)
-	}
-
-	invalidUncurated := metricSpec("<o11y:TimeSeriesChart>", map[string]any{})
-	invalidUncurated["programText"] = true
-	_, metadata, err = ParseContent("<o11y:TimeSeriesChart>", invalidUncurated)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if metadata.TypedSafe() || !hasValidationPath(metadata.ValidationErrors, "programText") {
-		t.Fatalf("invalid uncurated shape metadata = %+v", metadata)
 	}
 
 	emptyUnknown := map[string]any{
@@ -412,32 +383,6 @@ func TestExactJSONNumberConversionPreservesLosslessness(t *testing.T) {
 	}
 	if _, err := jsonInt64(json.Number("1.0")); err != nil {
 		t.Fatalf("whole decimal rejected: %v", err)
-	}
-}
-
-func TestCompactContractHandlesNullableAndArbitraryPrecisionNumbers(t *testing.T) {
-	node := &contractNode{Kinds: []string{"number", "null"}}
-	for _, value := range []any{nil, json.Number("1e400"), json.Number("-0.25")} {
-		if errors := validateContractNode("value", value, node); len(errors) != 0 {
-			t.Errorf("value %#v rejected: %+v", value, errors)
-		}
-	}
-	for _, value := range []any{json.Number("1/2"), json.Number("+1"), "1"} {
-		if errors := validateContractNode("value", value, node); len(errors) == 0 {
-			t.Errorf("non-JSON number %#v accepted", value)
-		}
-	}
-	conditionalObject := &contractNode{
-		Properties:      map[string]*contractNode{"name": {Kinds: []string{"string"}}},
-		Required:        []string{"name"},
-		AllowAdditional: false,
-	}
-	if errors := validateContractNode("value", map[string]any{}, conditionalObject); !hasValidationPath(errors, "value.name") {
-		t.Errorf("typeless object keywords were ignored: %+v", errors)
-	}
-	conditionalArray := &contractNode{Items: &contractNode{Kinds: []string{"string"}}}
-	if errors := validateContractNode("value", []any{true}, conditionalArray); !hasValidationPath(errors, "value.0") {
-		t.Errorf("typeless items keyword was ignored: %+v", errors)
 	}
 }
 
