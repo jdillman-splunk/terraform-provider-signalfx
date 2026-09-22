@@ -1,0 +1,24 @@
+# Copyright Splunk, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
+version: 1
+
+# Shared numeric precision control.
+#
+# Only significant digits is modeled: classic's `max_precision` maps to it and
+# is set on 1030/1175 single-value and 1738/1744 list charts. Dashify's
+# `maximumFractionDigits` has a UI control but no classic equivalent at all,
+# so it's left out under the classic-parity scoping rule.
+properties:
+  maximum_significant_digits:
+    type: number
+    optional: true
+    default: 4
+    min: 1
+    max: 20
+    description: >-
+      The number of significant digits to display for values in this chart.
+      Unset lets Splunk Observability Cloud adjust precision to fit the
+      available space.
+    mapping:
+      path: ['chart', 'maximumSignificantDigits']

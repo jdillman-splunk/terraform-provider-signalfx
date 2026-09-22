@@ -1,19 +1,28 @@
 // Copyright Splunk, Inc.
 // SPDX-License-Identifier: MPL-2.0
 
-package fwobservability
+package dashboard
 
-import "github.com/hashicorp/terraform-plugin-framework/types"
+import (
+	"fmt"
 
-// The transport models exactly match the schema available at each nesting
-// level. Terraform Plugin Framework requires this one-to-one correspondence.
-type observabilityDashboardModel struct {
+	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/splunk-terraform/terraform-provider-signalfx/internal/framework/observability/charts"
+)
+
+// Model is the Terraform transport model used by the parent dashboard
+// resource. Its fields exactly match the schema available at each nesting
+// level; nested Dashify transport types remain private to this package.
+type Model struct {
 	ID         types.String                     `tfsdk:"id"`
 	Title      types.String                     `tfsdk:"title"`
 	ControlBar *dashifyControlBarModel          `tfsdk:"control_bar"`
 	Layout     *dashifyLayoutOptionsModel       `tfsdk:"layout"`
 	Container  []dashifyDashboardContainerModel `tfsdk:"container"`
 }
+
+type observabilityDashboardModel = Model
 
 type dashifyControlBarModel struct {
 	TimeRange    *dashifyTimeRangeControlModel     `tfsdk:"time_range"`
@@ -97,28 +106,12 @@ type dashifyTemplateModel struct {
 	Content    types.String `tfsdk:"content"`
 }
 
-// TODO(charts): Generate the level-specific container chart fields from the
-// external Dashify schemas. The generated models should expose inline blocks
-// such as metrics_single_value and metrics_timeseries at every container level.
-type dashifyDashboardContainerModel struct {
-	Layout   *dashifyLayoutModel   `tfsdk:"layout"`
-	Template *dashifyTemplateModel `tfsdk:"template"`
-	Section  *dashifySectionModel  `tfsdk:"section"`
-	Group    *dashifyGroupModel    `tfsdk:"group"`
-}
-
 type dashifySectionModel struct {
 	Title       types.String                   `tfsdk:"title"`
 	Collapse    types.Bool                     `tfsdk:"collapse"`
 	Collapsible types.Bool                     `tfsdk:"collapsible"`
 	Layout      *dashifyLayoutOptionsModel     `tfsdk:"layout"`
 	Container   []dashifySectionContainerModel `tfsdk:"container"`
-}
-
-type dashifySectionContainerModel struct {
-	Layout   *dashifyLayoutModel   `tfsdk:"layout"`
-	Template *dashifyTemplateModel `tfsdk:"template"`
-	Group    *dashifyGroupModel    `tfsdk:"group"`
 }
 
 type dashifyGroupModel struct {
@@ -128,11 +121,6 @@ type dashifyGroupModel struct {
 	Container  []dashifyGroupContainerModel `tfsdk:"container"`
 }
 
-type dashifyGroupContainerModel struct {
-	Layout   *dashifyLayoutModel   `tfsdk:"layout"`
-	Template *dashifyTemplateModel `tfsdk:"template"`
-}
-
 // dashifyContainer is the shared semantic model used after decoding and
 // before encoding the level-specific Terraform transport models.
 type dashifyContainer struct {
@@ -140,9 +128,7 @@ type dashifyContainer struct {
 	Template *dashifyTemplateModel
 	Section  *dashifySection
 	Group    *dashifyGroup
-	// TODO(charts): Carry the generated chart-content abstraction through this
-	// shared model so metrics_single_value, metrics_timeseries, and later schema
-	// additions do not require hand-written fields here.
+	Charts   []charts.Entry
 }
 
 type dashifySection struct {
@@ -171,7 +157,7 @@ const (
 func dashifyContainersFromDashboardModels(models []dashifyDashboardContainerModel) []dashifyContainer {
 	containers := make([]dashifyContainer, len(models))
 	for i, model := range models {
-		container := dashifyContainer{Layout: model.Layout, Template: model.Template}
+		container := dashifyContainer{Layout: model.Layout, Template: model.Template, Charts: model.chartEntries()}
 		if model.Section != nil {
 			container.Section = &dashifySection{
 				Title:       model.Section.Title,
@@ -192,7 +178,7 @@ func dashifyContainersFromDashboardModels(models []dashifyDashboardContainerMode
 func dashifyContainersFromSectionModels(models []dashifySectionContainerModel) []dashifyContainer {
 	containers := make([]dashifyContainer, len(models))
 	for i, model := range models {
-		container := dashifyContainer{Layout: model.Layout, Template: model.Template}
+		container := dashifyContainer{Layout: model.Layout, Template: model.Template, Charts: model.chartEntries()}
 		if model.Group != nil {
 			container.Group = dashifyGroupFromModel(model.Group)
 		}
@@ -213,57 +199,83 @@ func dashifyGroupFromModel(model *dashifyGroupModel) *dashifyGroup {
 func dashifyContainersFromGroupModels(models []dashifyGroupContainerModel) []dashifyContainer {
 	containers := make([]dashifyContainer, len(models))
 	for i, model := range models {
-		containers[i] = dashifyContainer{Layout: model.Layout, Template: model.Template}
+		containers[i] = dashifyContainer{Layout: model.Layout, Template: model.Template, Charts: model.chartEntries()}
 	}
 	return containers
 }
 
-func dashifyDashboardModelsFromContainers(containers []dashifyContainer) []dashifyDashboardContainerModel {
+func dashifyDashboardModelsFromContainers(containers []dashifyContainer) ([]dashifyDashboardContainerModel, error) {
 	models := make([]dashifyDashboardContainerModel, len(containers))
 	for i, container := range containers {
 		model := dashifyDashboardContainerModel{Layout: container.Layout, Template: container.Template}
+		if err := model.setChartEntries(container.Charts); err != nil {
+			return nil, fmt.Errorf("dashboard container %d charts: %w", i, err)
+		}
 		if container.Section != nil {
+			sectionContainers, err := dashifySectionModelsFromContainers(container.Section.Container)
+			if err != nil {
+				return nil, fmt.Errorf("dashboard container %d section: %w", i, err)
+			}
 			model.Section = &dashifySectionModel{
 				Title:       container.Section.Title,
 				Collapse:    container.Section.Collapse,
 				Collapsible: container.Section.Collapsible,
 				Layout:      container.Section.Layout,
-				Container:   dashifySectionModelsFromContainers(container.Section.Container),
+				Container:   sectionContainers,
 			}
 		}
 		if container.Group != nil {
-			model.Group = dashifyGroupModelFromGroup(container.Group)
+			group, err := dashifyGroupModelFromGroup(container.Group)
+			if err != nil {
+				return nil, fmt.Errorf("dashboard container %d group: %w", i, err)
+			}
+			model.Group = group
 		}
 		models[i] = model
 	}
-	return models
+	return models, nil
 }
 
-func dashifySectionModelsFromContainers(containers []dashifyContainer) []dashifySectionContainerModel {
+func dashifySectionModelsFromContainers(containers []dashifyContainer) ([]dashifySectionContainerModel, error) {
 	models := make([]dashifySectionContainerModel, len(containers))
 	for i, container := range containers {
 		model := dashifySectionContainerModel{Layout: container.Layout, Template: container.Template}
+		if err := model.setChartEntries(container.Charts); err != nil {
+			return nil, fmt.Errorf("section container %d charts: %w", i, err)
+		}
 		if container.Group != nil {
-			model.Group = dashifyGroupModelFromGroup(container.Group)
+			group, err := dashifyGroupModelFromGroup(container.Group)
+			if err != nil {
+				return nil, fmt.Errorf("section container %d group: %w", i, err)
+			}
+			model.Group = group
 		}
 		models[i] = model
 	}
-	return models
+	return models, nil
 }
 
-func dashifyGroupModelFromGroup(group *dashifyGroup) *dashifyGroupModel {
+func dashifyGroupModelFromGroup(group *dashifyGroup) (*dashifyGroupModel, error) {
+	containers, err := dashifyGroupModelsFromContainers(group.Container)
+	if err != nil {
+		return nil, err
+	}
 	return &dashifyGroupModel{
 		Title:      group.Title,
 		Headerless: group.Headerless,
 		Layout:     group.Layout,
-		Container:  dashifyGroupModelsFromContainers(group.Container),
-	}
+		Container:  containers,
+	}, nil
 }
 
-func dashifyGroupModelsFromContainers(containers []dashifyContainer) []dashifyGroupContainerModel {
+func dashifyGroupModelsFromContainers(containers []dashifyContainer) ([]dashifyGroupContainerModel, error) {
 	models := make([]dashifyGroupContainerModel, len(containers))
 	for i, container := range containers {
-		models[i] = dashifyGroupContainerModel{Layout: container.Layout, Template: container.Template}
+		model := dashifyGroupContainerModel{Layout: container.Layout, Template: container.Template}
+		if err := model.setChartEntries(container.Charts); err != nil {
+			return nil, fmt.Errorf("group container %d charts: %w", i, err)
+		}
+		models[i] = model
 	}
-	return models
+	return models, nil
 }

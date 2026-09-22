@@ -5,6 +5,9 @@ package fwobservability
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"sync"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -47,7 +50,7 @@ func TestObservabilityDirectoryPatchReplacesMembership(t *testing.T) {
 	require.False(t, diags.HasError(), diags)
 	require.NotNil(t, patch)
 	require.NotNil(t, patch.Templates)
-	assert.Equal(t, []string{"/v2/template/dashboard-a", "/v2/template/dashboard-b"}, *patch.Templates)
+	assert.Equal(t, []string{"/v2/template/dashboard-a", "/v2/template/dashboard-b"}, patch.Templates)
 	require.NotNil(t, patch.Pinned)
 	assert.True(t, *patch.Pinned)
 
@@ -68,7 +71,7 @@ func TestObservabilityDirectoryPatchReplacesMembership(t *testing.T) {
 	patch, diags = observabilityDirectoryPatch(t.Context(), types.BoolValue(false), empty)
 	require.False(t, diags.HasError(), diags)
 	require.NotNil(t, patch.Templates)
-	assert.Empty(t, *patch.Templates)
+	assert.Empty(t, patch.Templates)
 }
 
 func TestResourceObservabilityDirectoryTemplatesRejectsDuplicates(t *testing.T) {
@@ -246,4 +249,66 @@ func TestResourceObservabilityDirectoryLifecycleAndGeneratedConfig(t *testing.T)
 			},
 		},
 	)
+}
+
+// directoryAPIStore is a minimal in-memory fake of the Directory API used by
+// the Directory resource lifecycle tests.
+type directoryAPIStore struct {
+	mu      sync.Mutex
+	entries map[string]*directory.Entry
+}
+
+func newDirectoryAPIStore() *directoryAPIStore {
+	return &directoryAPIStore{entries: make(map[string]*directory.Entry)}
+}
+
+func (s *directoryAPIStore) handlers() map[string]http.Handler {
+	return map[string]http.Handler{
+		"GET /v2/directory/{path...}":    http.HandlerFunc(s.read),
+		"PATCH /v2/directory/{path...}":  http.HandlerFunc(s.patch),
+		"DELETE /v2/directory/{path...}": http.HandlerFunc(s.delete),
+	}
+}
+
+func (s *directoryAPIStore) read(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	entry, ok := s.entries[r.PathValue("path")]
+	s.mu.Unlock()
+	if !ok {
+		http.Error(w, "directory entry not found", http.StatusNotFound)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(directory.Result{Data: entry})
+}
+
+func (s *directoryAPIStore) patch(w http.ResponseWriter, r *http.Request) {
+	var patch directory.Patch
+	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	path := r.PathValue("path")
+	s.mu.Lock()
+	entry, ok := s.entries[path]
+	if !ok {
+		entry = &directory.Entry{Path: path}
+		s.entries[path] = entry
+	}
+	if patch.Pinned != nil {
+		entry.Pinned = *patch.Pinned
+	}
+	if patch.Templates != nil {
+		entry.Templates = patch.Templates
+	}
+	s.mu.Unlock()
+
+	_ = json.NewEncoder(w).Encode(directory.Result{Data: entry})
+}
+
+func (s *directoryAPIStore) delete(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	delete(s.entries, r.PathValue("path"))
+	s.mu.Unlock()
+	w.WriteHeader(http.StatusNoContent)
 }

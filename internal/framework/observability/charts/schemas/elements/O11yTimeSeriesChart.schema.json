@@ -1,0 +1,518 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schema.splunkdev.com/dashify/v1/elements/o11y-time-series-chart.json",
+  "title": "o11y:TimeSeriesChart",
+  "description": "Configuration for the o11y:TimeSeriesChart dashboard element.",
+  "type": "object",
+  "properties": {
+    "chart": {
+      "$ref": "#/$defs/O11yTimeSeriesChartConfig"
+    },
+    "datasource": {
+      "$ref": "#/$defs/O11ySignalFlowDatasourceProps"
+    },
+    "widget": {
+      "$ref": "#/$defs/O11yWidgetProps"
+    },
+    "programText": {
+      "type": "string",
+      "description": "SignalFlow program used when creating a detector from the chart."
+    }
+  },
+  "required": ["chart", "datasource", "widget"],
+  "additionalProperties": false,
+  "$defs": {
+    "O11yTimeSeriesChartConfig": {
+      "type": "object",
+      "properties": {
+        "hideMissingValues": {
+          "type": "boolean"
+        },
+        "noDataOptions": {
+          "$ref": "#/$defs/O11yNoDataOptionsProps"
+        },
+        "chartOptions": {
+          "$ref": "#/$defs/O11yTimeSeriesChartOptions"
+        },
+        "legend": {
+          "$ref": "#/$defs/O11yTimeSeriesLegendProps"
+        },
+        "yAxes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/O11yYAxisProps"
+          }
+        },
+        "seriesOptions": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/O11yTimeSeriesSeriesOptions"
+          }
+        },
+        "defaultSeriesOptions": {
+          "$ref": "#/$defs/O11yTimeSeriesSeriesOptions"
+        },
+        "additionalProperties": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/O11yDataTablePropertyProps"
+          }
+        },
+        "xAxis": {
+          "$ref": "#/$defs/O11yXAxisProps"
+        },
+        "showClickHint": {
+          "type": "boolean"
+        },
+        "marks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/O11yMarkProps"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11yNoDataOptionsProps": {
+      "type": "object",
+      "properties": {
+        "linkText": {
+          "type": "string"
+        },
+        "linkUrl": {
+          "type": "string"
+        },
+        "noDataMessage": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11yTimeSeriesChartOptions": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/O11yTimeSeriesPlotType"
+        },
+        "axisPrecision": {
+          "type": "number",
+          "deprecated": true,
+          "description": "Use maximumSignificantDigits instead."
+        },
+        "maximumFractionDigits": {
+          "type": "number"
+        },
+        "maximumSignificantDigits": {
+          "type": "number"
+        },
+        "showDataMarkers": {
+          "type": "boolean"
+        },
+        "showEventLines": {
+          "type": "boolean"
+        },
+        "dimensionInLegend": {
+          "type": "string"
+        },
+        "useKmg2": {
+          "type": "boolean"
+        },
+        "colorBy": {
+          "type": "string",
+          "enum": ["Dimension", "Metric"]
+        },
+        "maxSeries": {
+          "type": "number"
+        },
+        "heatmapPalette": {
+          "type": ["string", "number"]
+        },
+        "heatmapYBucketCount": {
+          "type": "number"
+        },
+        "heatmapXBucketCount": {
+          "type": "number"
+        },
+        "heatmapGap": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11yTimeSeriesPlotType": {
+      "type": "string",
+      "enum": ["line", "area", "points", "bar", "stacked-bar", "stacked-area", "heatmap"]
+    },
+    "O11yTimeSeriesLegendProps": {
+      "type": "object",
+      "properties": {
+        "fontSize": {
+          "type": "number"
+        },
+        "hide": {
+          "type": "boolean"
+        },
+        "width": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        },
+        "showSeriesValue": {
+          "type": "boolean"
+        },
+        "canToggleSeriesVisibility": {
+          "type": "boolean"
+        },
+        "position": {
+          "type": "string",
+          "enum": ["bottom", "right"]
+        },
+        "reversedOrder": {
+          "type": "boolean"
+        },
+        "aggregateMode": {
+          "type": "string",
+          "enum": ["sum", "average"]
+        },
+        "legendTruncation": {
+          "type": "string",
+          "enum": ["ellipsisEnd", "ellipsisMiddle", "ellipsisStart"]
+        },
+        "additionalLegendItems": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/O11yLegendItemProps"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11yLegendItemProps": {
+      "type": "object",
+      "properties": {
+        "field": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "fill": {
+          "type": "string"
+        },
+        "stroke": {
+          "type": "string"
+        },
+        "show": {
+          "type": "boolean"
+        }
+      },
+      "required": ["field", "show"],
+      "additionalProperties": false
+    },
+    "O11yYAxisProps": {
+      "type": "object",
+      "properties": {
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "label": {
+          "type": "string"
+        },
+        "width": {
+          "type": "number"
+        },
+        "maximumFractionDigits": {
+          "type": "number"
+        },
+        "maximumSignificantDigits": {
+          "type": "number"
+        },
+        "highWatermark": {
+          "type": "number"
+        },
+        "highWatermarkLabel": {
+          "type": "string"
+        },
+        "lowWatermark": {
+          "type": "number"
+        },
+        "lowWatermarkLabel": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11yTimeSeriesSeriesOptions": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "paletteIndex": {
+          "type": "number"
+        },
+        "color": {
+          "type": "string"
+        },
+        "hashKey": {
+          "type": "string"
+        },
+        "displayUnit": {
+          "$ref": "#/$defs/O11yDisplayUnit"
+        },
+        "valuePrefix": {
+          "type": "string",
+          "deprecated": true,
+          "description": "Use displayUnit instead."
+        },
+        "valueSuffix": {
+          "type": "string",
+          "deprecated": true,
+          "description": "Use displayUnit instead."
+        },
+        "valueUnit": {
+          "$ref": "#/$defs/O11yScalingUnit",
+          "deprecated": true,
+          "description": "Use displayUnit instead."
+        },
+        "plotType": {
+          "$ref": "#/$defs/O11yTimeSeriesPlotType"
+        },
+        "yAxis": {
+          "type": "number"
+        },
+        "precision": {
+          "type": "number",
+          "deprecated": true,
+          "description": "Use maximumSignificantDigits instead."
+        },
+        "maximumFractionDigits": {
+          "type": "number"
+        },
+        "maximumSignificantDigits": {
+          "type": "number"
+        },
+        "aggregateMode": {
+          "type": "string",
+          "enum": ["sum", "average"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11yDisplayUnit": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/O11yScalingUnit"
+        },
+        {
+          "$ref": "#/$defs/O11yDisplayUnitCustom"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "O11yScalingUnit": {
+      "type": "string",
+      "enum": [
+        "Bit",
+        "Kilobit",
+        "Megabit",
+        "Gigabit",
+        "Terabit",
+        "Petabit",
+        "Exabit",
+        "Zettabit",
+        "Yottabit",
+        "Byte",
+        "Kibibyte",
+        "Mebibyte",
+        "Gibibyte",
+        "Tebibyte",
+        "Pebibyte",
+        "Exbibyte",
+        "Zebibyte",
+        "Yobibyte",
+        "Nanosecond",
+        "Microsecond",
+        "Millisecond",
+        "Second",
+        "Minute",
+        "Hour",
+        "Day",
+        "Week"
+      ]
+    },
+    "O11yDisplayUnitCustom": {
+      "type": "object",
+      "properties": {
+        "prefix": {
+          "type": ["string", "null"]
+        },
+        "suffix": {
+          "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11yDataTablePropertyProps": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "property": {
+          "type": "string"
+        }
+      },
+      "required": ["enabled", "property"],
+      "additionalProperties": false
+    },
+    "O11yXAxisProps": {
+      "type": "object",
+      "properties": {
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11yMarkProps": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        },
+        "scale": {
+          "type": "string"
+        },
+        "color": {
+          "type": "string"
+        },
+        "style": {
+          "type": "string",
+          "enum": ["solid", "dashed", "dotted"]
+        },
+        "width": {
+          "type": "number"
+        },
+        "legendLabel": {
+          "type": "string"
+        }
+      },
+      "required": ["value"],
+      "additionalProperties": false
+    },
+    "O11ySignalFlowDatasourceProps": {
+      "type": "object",
+      "properties": {
+        "program": {
+          "type": "string"
+        },
+        "maxDelay": {
+          "type": ["number", "null"]
+        },
+        "resolution": {
+          "type": ["number", "null"]
+        },
+        "minimumResolution": {
+          "type": ["number", "null"]
+        },
+        "sampleSize": {
+          "type": "number"
+        },
+        "backfillSliceCount": {
+          "type": "number"
+        },
+        "preferredEditor": {
+          "type": "string"
+        },
+        "time": {
+          "$ref": "#/$defs/O11yTimeRangeProps"
+        },
+        "events": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11yTimeRangeProps": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["absolute", "relative"]
+        },
+        "range": {
+          "type": "number"
+        },
+        "rangeEnd": {
+          "type": "number"
+        },
+        "start": {
+          "type": "number"
+        },
+        "end": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11yWidgetProps": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "aiGenerated": {
+          "type": "boolean"
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/O11yLinkProps"
+          }
+        },
+        "headerless": {
+          "type": "boolean"
+        },
+        "borderless": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11yLinkProps": {
+      "type": "object",
+      "properties": {
+        "external": {
+          "type": "boolean"
+        },
+        "label": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": ["url"],
+      "additionalProperties": false
+    }
+  }
+}

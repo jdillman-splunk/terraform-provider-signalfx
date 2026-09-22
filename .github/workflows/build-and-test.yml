@@ -7,6 +7,29 @@ on:
   pull_request:
 
 jobs:
+  generated-code:
+    name: generated-code-drift
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the codebase.
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 'stable'
+
+      - name: Caching dependency
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+
+      - name: Check generated chart code
+        run: make check-generated-charts
+
   build:
     name: build
     runs-on: ubuntu-latest

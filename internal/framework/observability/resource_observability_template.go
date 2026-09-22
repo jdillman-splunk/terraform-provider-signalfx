@@ -5,9 +5,13 @@ package fwobservability
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -89,7 +93,7 @@ func (r *observabilityTemplateResource) Schema(_ context.Context, _ resource.Sch
 				Required:    true,
 				Description: "JSON object containing the polymorphic template specification.",
 				PlanModifiers: []planmodifier.String{
-					observabilityJSONSemanticEqualityModifier{},
+					fwshared.JSONSemanticEqualityModifier{},
 				},
 			},
 		},
@@ -273,21 +277,103 @@ func (r *observabilityTemplateResource) Delete(ctx context.Context, req resource
 	resp.Diagnostics.Append(fwerr.ErrorHandler(ctx, resp.State, r.Details().Client.DeleteTemplate(ctx, model.ID.ValueString()))...)
 }
 
-type observabilityJSONSemanticEqualityModifier struct{}
-
-func (observabilityJSONSemanticEqualityModifier) Description(_ context.Context) string {
-	return "Treats JSON content as unchanged when it is semantically equivalent to the prior value."
-}
-
-func (m observabilityJSONSemanticEqualityModifier) MarkdownDescription(ctx context.Context) string {
-	return m.Description(ctx)
-}
-
-func (m observabilityJSONSemanticEqualityModifier) PlanModifyString(_ context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
-	if req.StateValue.IsNull() || req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+func validateObservabilityTitle(resp *resource.ValidateConfigResponse, titlePath path.Path, title types.String) {
+	if title.IsUnknown() {
 		return
 	}
-	if observabilityJSONEqual(req.StateValue.ValueString(), req.ConfigValue.ValueString()) {
-		resp.PlanValue = req.StateValue
+	if title.IsNull() || strings.TrimSpace(title.ValueString()) == "" {
+		resp.Diagnostics.AddAttributeError(titlePath, "Missing required value", "title must contain at least one non-whitespace character")
 	}
+}
+
+func observabilityTemplateFromResult(result *template.Result) (*template.Template, error) {
+	if result == nil || result.Data == nil {
+		return nil, errors.New("template API returned no template record")
+	}
+	return result.Data, nil
+}
+
+func observabilityTemplateWrite(ctx context.Context, model observabilityTemplateModel) (*template.Content, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	if model.RootElement.IsNull() || model.RootElement.IsUnknown() || model.RootElement.ValueString() == "" {
+		diags.AddError("Missing template root element", "root_element must be a non-empty value.")
+		return nil, diags
+	}
+	if err := validateObservabilityTemplateSpec(model.Spec.ValueString()); err != nil {
+		diags.AddError("Invalid template specification", err.Error())
+		return nil, diags
+	}
+
+	var imports []string
+	var datasource *template.Datasource
+	if model.Metadata != nil {
+		if !model.Metadata.Imports.IsNull() && !model.Metadata.Imports.IsUnknown() {
+			diags.Append(model.Metadata.Imports.ElementsAs(ctx, &imports, false)...)
+			if diags.HasError() {
+				return nil, diags
+			}
+		}
+
+		if model.Metadata.Datasource != nil {
+			datasource = &template.Datasource{
+				Type:        template.DatasourceType(model.Metadata.Datasource.Type.ValueString()),
+				ProgramText: model.Metadata.Datasource.ProgramText.ValueString(),
+				SLOID:       model.Metadata.Datasource.SLOID.ValueString(),
+			}
+		}
+	}
+
+	rootElement := template.RootElement(model.RootElement.ValueString())
+	return &template.Content{
+		Type:  template.RecordType,
+		Title: model.Title.ValueString(),
+		Spec:  json.RawMessage(model.Spec.ValueString()),
+		Metadata: template.WriteMetadata{
+			RootElement: &rootElement,
+			Imports:     imports,
+			Datasource:  datasource,
+		},
+	}, diags
+}
+
+func observabilityTemplateModelFromRecord(prior observabilityTemplateModel, record *template.Template) (observabilityTemplateModel, error) {
+	if record == nil {
+		return observabilityTemplateModel{}, errors.New("template API returned no template record")
+	}
+	if record.ID == "" {
+		return observabilityTemplateModel{}, errors.New("template API returned a template record without an ID")
+	}
+	if record.Metadata == nil || record.Metadata.RootElement == nil {
+		return observabilityTemplateModel{}, errors.New("template API returned a template record without root element metadata")
+	}
+	if err := validateObservabilityTemplateSpec(string(record.Spec)); err != nil {
+		return observabilityTemplateModel{}, fmt.Errorf("template API returned an invalid specification: %w", err)
+	}
+
+	var metadata *observabilityTemplateMetadataModel
+	if prior.Metadata != nil {
+		metadata = &observabilityTemplateMetadataModel{
+			Imports:    prior.Metadata.Imports,
+			Datasource: prior.Metadata.Datasource,
+		}
+	}
+
+	return observabilityTemplateModel{
+		ID:          types.StringValue(record.ID),
+		Title:       types.StringValue(record.Title),
+		RootElement: types.StringValue(string(*record.Metadata.RootElement)),
+		Spec:        types.StringValue(string(record.Spec)),
+		Metadata:    metadata,
+	}, nil
+}
+
+func validateObservabilityTemplateSpec(raw string) error {
+	var value any
+	if err := json.Unmarshal([]byte(raw), &value); err != nil {
+		return fmt.Errorf("spec must be valid JSON: %w", err)
+	}
+	if _, ok := value.(map[string]any); !ok {
+		return errors.New("spec must be a JSON object")
+	}
+	return nil
 }

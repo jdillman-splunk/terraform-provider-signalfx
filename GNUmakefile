@@ -83,6 +83,15 @@ test-compile:
 	fi
 	go test -c $(TEST) $(TESTARGS)
 
+.PHONY: generate-charts write-generated-charts check-generated-charts
+generate-charts: write-generated-charts
+
+write-generated-charts:
+	GOWORK=off go run ./internal/framework/observability/chartgen -mode=write
+
+check-generated-charts:
+	GOWORK=off go run ./internal/framework/observability/chartgen -mode=check
+
 check-docs: gen-docs
 	@if [ "`git status --porcelain docs/`" ];then \
 		git diff;\

@@ -1,0 +1,124 @@
+# Copyright Splunk, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
+type: metrics_table
+version: 1
+description: >-
+  Terraform-facing schema for Dashify's o11y:TableChart chart (not o11y:Table -
+  confirmed against the real element tag), scoped to what the 103 existing
+  signalfx_table_chart resources in terraform-monitoring actually set. This is
+  the rarest classic chart type by a wide margin (0.5% of all charts), so the
+  schema is deliberately minimal.
+
+# Permanent gap: classic `timezone`/`refresh_interval` - see
+# common/signalfx_datasource.yml's file-level note.
+#
+# `published_streams` is deliberately not extended here even though it's
+# typed on Dashify's TableChart element: the renderer never reads it and the
+# importer never writes it (per-column name/unit instead comes from
+# `columns` below), so extending it would write JSON Dashify silently
+# ignores. See common/published_streams.yml's own file-level note.
+
+# No secondary_visualization (no such concept for Table).
+extends:
+  - common/widget.yml
+  - common/signalfx_datasource.yml
+  - common/precision.yml
+  - common/timestamp.yml
+
+dashify:
+  element:
+    name: 'o11y:TableChart'
+    args: []
+
+normalizations:
+  - kind: fallback
+    target: ['chart', 'maximumSignificantDigits']
+    source: ['chart', 'maxPrecision']
+  - kind: wrap_scalar_array
+    target: ['chart', 'groupBy']
+  - kind: display_unit
+    target: ['chart', 'columns', '*', 'displayUnit']
+    unit: ['chart', 'columns', '*', 'unit']
+    prefix: ['chart', 'columns', '*', 'prefix']
+    suffix: ['chart', 'columns', '*', 'suffix']
+
+properties:
+  group_by:
+    type: string
+    optional: true
+    # classic: `group_by` (100/100 - always set). The underlying Dashify type
+    # is string[], but its GroupByOptions select only ever picks one value and
+    # wraps it, so this stays a scalar and the serializer wraps.
+    description: The metadata property to group table rows by.
+    mapping:
+      path: ['chart', 'groupBy']
+      wrap: array
+
+  hide_missing_values:
+    type: bool
+    optional: true
+    default: false
+    # No classic equivalent on table charts, but Dashify has a real control
+    # and list charts use the identical concept on 1709 resources - kept as a
+    # one-line field rather than a deliberate capability gap.
+    description: >-
+      Whether to exclude a series whose most recent value is missing, and
+      any series whose latest timestamp is older than the newest remaining
+      series.
+    mapping:
+      path: ['chart', 'hideMissingValues']
+
+  disable_sampling:
+    type: bool
+    optional: true
+    default: false
+    # classic: `disable_sampling` (103/103 - always explicitly set, though
+    # only 32 non-default). Unlike list/single_value/time_series, TableChart
+    # has a genuine boolean disableSampling prop rather than a numeric
+    # sampleSize cap - see common/signalfx_datasource.yml's file-level note.
+    description: >-
+      Whether to sample fewer of the matched time series for better
+      rendering performance. When disabled, more series are shown but the
+      chart may load more slowly.
+    mapping:
+      path: ['chart', 'disableSampling']
+
+  columns:
+    type: list
+    optional: true
+    # classic's viz_options (per-plot label/unit overrides) has no
+    # counterpart on TableChart in the current data model - the real Dashify
+    # field for per-column display is `columns`, keyed by SignalFlow publish
+    # label, not the shared published_streams map (see the file-level note
+    # above).
+    description: >-
+      Per-column display overrides. Each entry corresponds to one SignalFlow
+      publish label.
+    mapping:
+      path: ['chart', 'columns']
+    item:
+      properties:
+        field:
+          type: string
+          required: true
+          description: The SignalFlow publish label this column shows.
+          mapping:
+            path: ['field']
+        header_name:
+          type: string
+          optional: true
+          description: An alternate column header, in place of the raw publish label.
+          mapping:
+            path: ['headerName']
+        display_unit:
+          ref: common/display_unit.yml#display_unit
+          optional: true
+          mapping:
+            path: ['displayUnit']
+        enabled:
+          type: bool
+          optional: true
+          description: Whether this column is shown.
+          mapping:
+            path: ['enabled']

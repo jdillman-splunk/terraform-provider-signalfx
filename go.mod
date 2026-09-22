@@ -18,11 +18,13 @@ require (
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.40.1
 	github.com/hashicorp/terraform-plugin-testing v1.16.0
 	github.com/mitchellh/go-homedir v1.1.0
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/signalfx/signalfx-go v1.61.0
 	github.com/stretchr/testify v1.11.1
 	github.com/tilinna/clock v1.1.0
 	go.uber.org/multierr v1.11.0
 	golang.org/x/sync v0.22.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -86,5 +88,4 @@ require (
 	google.golang.org/grpc v1.81.1 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

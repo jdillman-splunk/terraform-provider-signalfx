@@ -1,0 +1,96 @@
+# Copyright Splunk, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
+version: 1
+
+# Shared datasource controls for the SignalFx (Splunk Observability Cloud)
+# metrics provider. `program` is a SignalFlow program - the query language
+# the backend executes - not a Splunk SPL/logs query. Dashify's document
+# format doesn't tag a provider type on this block; it's implicit from the
+# widget's chart element, so this file only covers that one provider.
+#
+# Scoping note: `program` is the only one of these with a Dashify editor
+# control. `max_delay`/`minimum_resolution`/`sample_size` have no UI (they're
+# advanced/JSON-only in the app) but are set on nearly every classic chart in
+# terraform-monitoring, so a migration that dropped them would silently
+# change query behavior. They're included on classic-parity grounds, not UI
+# grounds.
+#
+# `time` is generic across every Dashify chart element (List, SingleValue,
+# TableChart, TimeSeriesChart, Heatmap, ... all resolve datasource.time
+# through the same $utils.resolveTimeRange helper in
+# app-modern-dashboards' src/_templates/O11y*.ts), so it lives here rather
+# than being time-series-specific.
+#
+# Dropped: classic `disable_sampling`. Dashify has no boolean sampling
+# toggle - it stores a numeric sample cap instead, which `sample_size`
+# models directly (classic `disable_sampling = true` is roughly
+# `sample_size = 100`; `false` is the ~1000 default). No transform converts
+# one to the other, so author `sample_size` directly. `signalfx_table_chart`
+# is the one classic resource with a real boolean equivalent - see
+# the table schema's own `disable_sampling`, which maps to a different, genuinely
+# boolean Dashify field.
+#
+# Permanent gap: classic `timezone` (954 active uses across all chart
+# types). Dashify has no per-chart display timezone; the nearest field,
+# `datasource.timezone`, is SignalFlow calendar-window semantics, not a
+# display setting, and no real document sets it - do not map classic
+# `timezone` onto it.
+properties:
+  program:
+    type: string
+    required: true
+    min_length: 1
+    # classic: `program_text` (100% of charts)
+    description: >-
+      The SignalFlow program that produces the chart's data. Multiple
+      statements are separated by semicolons or newlines.
+    mapping:
+      path: ['datasource', 'program']
+
+  max_delay:
+    type: number
+    optional: true
+    # classic: `max_delay` (738/1115 single-value, 966/1655 list, 85/102 table)
+    description: >-
+      Milliseconds to wait for late-arriving data points before charting
+      what has arrived. 0 lets Splunk Observability Cloud choose
+      automatically.
+    mapping:
+      path: ['datasource', 'maxDelay']
+
+  minimum_resolution:
+    type: number
+    optional: true
+    # classic: `minimum_resolution` (85/100 table; rare elsewhere)
+    description: >-
+      The lowest resolution, in milliseconds, to use when computing the
+      chart's SignalFlow program. 0 lets Splunk Observability Cloud choose
+      automatically.
+    mapping:
+      path: ['datasource', 'minimumResolution']
+
+  sample_size:
+    type: number
+    optional: true
+    # classic's boolean `disable_sampling` is really this numeric cap in
+    # Dashify - see the file-level note above.
+    description: >-
+      The maximum number of time series to sample when a query matches more
+      than this many.
+    mapping:
+      path: ['datasource', 'sampleSize']
+
+  time_range:
+    type: string
+    optional: true
+    # Basic relative override such as "15m" or "1h". The transform writes
+    # {type: "relative", range: <milliseconds>, rangeEnd: 0}. Absolute and
+    # other custom time objects use the raw-template path.
+    description: >-
+      A relative time range override for this chart, such as "15m" or "1h",
+      independent of the dashboard's own time range. Absolute ranges are not
+      supported here.
+    mapping:
+      path: ['datasource', 'time']
+      transform: relative_duration

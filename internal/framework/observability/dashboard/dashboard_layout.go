@@ -1,11 +1,10 @@
 // Copyright Splunk, Inc.
 // SPDX-License-Identifier: MPL-2.0
 
-package fwobservability
+package dashboard
 
 import (
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 
@@ -208,7 +207,7 @@ func takeDashifyLayoutOrder(item map[string]any) {
 	if !ok {
 		return
 	}
-	if number, ok := raw.(float64); ok && !math.IsNaN(number) && !math.IsInf(number, 0) {
+	if _, ok := dashifyFiniteNumber(raw); ok {
 		delete(item, "order")
 	}
 }
@@ -310,8 +309,8 @@ func dashifyLayoutFloat(object map[string]any, key string) (types.Float64, bool,
 	if !ok {
 		return types.Float64Null(), false, nil
 	}
-	number, ok := raw.(float64)
-	if !ok || math.IsNaN(number) || math.IsInf(number, 0) {
+	number, ok := dashifyFiniteNumber(raw)
+	if !ok {
 		return types.Float64Null(), false, fmt.Errorf("layout.%s is %v (%T) rather than a finite number", key, raw, raw)
 	}
 	delete(object, key)

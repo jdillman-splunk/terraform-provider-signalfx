@@ -1,7 +1,7 @@
 // Copyright Splunk, Inc.
 // SPDX-License-Identifier: MPL-2.0
 
-package fwobservability
+package dashboard
 
 import (
 	"encoding/json"

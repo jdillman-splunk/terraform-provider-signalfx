@@ -73,7 +73,7 @@ func (r *observabilityDirectoryResource) Schema(_ context.Context, _ resource.Sc
 				Computed:    true,
 				Default:     listdefault.StaticValue(types.ListValueMust(types.StringType, []attr.Value{})),
 				Description: "Complete ordered list of Template API references assigned to this Directory, such as /v2/template/<id>. Updating this attribute replaces the entire backend list; concurrent UI or API changes are last-write-wins.",
-				Validators:  append(nonEmptyStringListValidators(), listvalidator.UniqueValues()),
+				Validators:  append(fwshared.NonEmptyStringListValidators(), listvalidator.UniqueValues()),
 			},
 			"pinned": schema.BoolAttribute{
 				Optional:    true,
@@ -248,7 +248,7 @@ func observabilityDirectoryPatch(ctx context.Context, pinned types.Bool, templat
 	if diags.HasError() {
 		return nil, diags
 	}
-	patch.Templates = &references
+	patch.Templates = references
 	return patch, diags
 }
 

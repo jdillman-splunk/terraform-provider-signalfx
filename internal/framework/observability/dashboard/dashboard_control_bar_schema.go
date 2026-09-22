@@ -1,7 +1,7 @@
 // Copyright Splunk, Inc.
 // SPDX-License-Identifier: MPL-2.0
 
-package fwobservability
+package dashboard
 
 import (
 	"fmt"
@@ -13,6 +13,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	fwshared "github.com/splunk-terraform/terraform-provider-signalfx/internal/framework/shared"
 )
 
 func dashifyControlBarBlock() schema.SingleNestedBlock {
@@ -99,7 +101,7 @@ func dashifyControlBarBlock() schema.SingleNestedBlock {
 									Required:    true,
 									ElementType: types.StringType,
 									Description: "Values for the filter. An empty list has no effect.",
-									Validators:  nonEmptyStringListValidators(),
+									Validators:  fwshared.NonEmptyStringListValidators(),
 								},
 								"negated": schema.BoolAttribute{
 									Optional:    true,
@@ -139,7 +141,7 @@ func optionalStringList(description string) schema.ListAttribute {
 		Optional:    true,
 		ElementType: types.StringType,
 		Description: description,
-		Validators:  nonEmptyStringListValidators(),
+		Validators:  fwshared.NonEmptyStringListValidators(),
 	}
 }
 

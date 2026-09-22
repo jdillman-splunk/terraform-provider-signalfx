@@ -1,11 +1,10 @@
 // Copyright Splunk, Inc.
 // SPDX-License-Identifier: MPL-2.0
 
-package fwobservability
+package dashboard
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -317,22 +316,13 @@ func takeDashifyControlBool(object map[string]any, key, path string) (types.Bool
 	return types.BoolValue(value), nil
 }
 
-// Only float64 is accepted because parseDashboardTemplate decodes the whole
-// spec with plain json.Unmarshal (no UseNumber); a json.Decoder with
-// UseNumber would need a branch here too.
 func takeDashifyControlInt64(object map[string]any, key, path string) (types.Int64, error) {
 	raw, ok := object[key]
 	if !ok {
 		return types.Int64Null(), nil
 	}
-	var value int64
-	switch number := raw.(type) {
-	case float64:
-		if math.IsNaN(number) || math.IsInf(number, 0) || math.Trunc(number) != number || number > math.MaxInt64 || number < math.MinInt64 {
-			return types.Int64Null(), fmt.Errorf("%s.%s is %v rather than an integer", path, key, raw)
-		}
-		value = int64(number)
-	default:
+	value, valid := dashifyExactInt64(raw)
+	if !valid {
 		return types.Int64Null(), fmt.Errorf("%s.%s is %v (%T) rather than an integer", path, key, raw, raw)
 	}
 	delete(object, key)

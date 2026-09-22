@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schema.splunkdev.com/dashify/v1/elements/o11y-text.json",
+  "title": "o11y:Text",
+  "description": "Configuration for the o11y:Text dashboard element.",
+  "type": "object",
+  "properties": {
+    "chart": {
+      "$ref": "#/$defs/O11yTextChartProps"
+    },
+    "datasource": {
+      "$ref": "#/$defs/O11ySignalFlowDatasourceProps"
+    },
+    "widget": {
+      "$ref": "#/$defs/O11yWidgetProps"
+    }
+  },
+  "required": ["chart", "widget"],
+  "additionalProperties": false,
+  "$defs": {
+    "O11yTextChartProps": {
+      "type": "object",
+      "properties": {
+        "markdown": {
+          "type": "string",
+          "description": "Markdown body to render."
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11ySignalFlowDatasourceProps": {
+      "type": "object",
+      "properties": {
+        "program": {
+          "type": "string"
+        },
+        "maxDelay": {
+          "type": ["number", "null"]
+        },
+        "resolution": {
+          "type": ["number", "null"]
+        },
+        "minimumResolution": {
+          "type": ["number", "null"]
+        },
+        "sampleSize": {
+          "type": "number"
+        },
+        "backfillSliceCount": {
+          "type": "number"
+        },
+        "preferredEditor": {
+          "type": "string"
+        },
+        "time": {
+          "$ref": "#/$defs/O11yTimeRangeProps"
+        },
+        "events": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11yTimeRangeProps": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["absolute", "relative"]
+        },
+        "range": {
+          "type": "number"
+        },
+        "rangeEnd": {
+          "type": "number"
+        },
+        "start": {
+          "type": "number"
+        },
+        "end": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11yWidgetProps": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "aiGenerated": {
+          "type": "boolean"
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/O11yLinkProps"
+          }
+        },
+        "headerless": {
+          "type": "boolean"
+        },
+        "borderless": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11yLinkProps": {
+      "type": "object",
+      "properties": {
+        "external": {
+          "type": "boolean"
+        },
+        "label": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": ["url"],
+      "additionalProperties": false
+    }
+  }
+}

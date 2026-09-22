@@ -1,0 +1,295 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schema.splunkdev.com/dashify/v1/elements/o11y-single-value.json",
+  "title": "o11y:SingleValue",
+  "description": "Configuration for the o11y:SingleValue dashboard element.",
+  "type": "object",
+  "properties": {
+    "chart": {
+      "$ref": "#/$defs/O11ySingleValueChartProps"
+    },
+    "datasource": {
+      "$ref": "#/$defs/O11ySignalFlowDatasourceProps"
+    },
+    "widget": {
+      "$ref": "#/$defs/O11yWidgetProps"
+    }
+  },
+  "required": ["chart", "datasource", "widget"],
+  "additionalProperties": false,
+  "$defs": {
+    "O11ySingleValueChartProps": {
+      "type": "object",
+      "properties": {
+        "colorScale": {
+          "$ref": "#/$defs/O11yColorScale"
+        },
+        "numberPrecision": {
+          "type": "number",
+          "deprecated": true,
+          "description": "Use maximumFractionDigits instead."
+        },
+        "maxPrecision": {
+          "type": "number",
+          "deprecated": true,
+          "description": "Use maximumSignificantDigits instead."
+        },
+        "maximumFractionDigits": {
+          "type": "number"
+        },
+        "maximumSignificantDigits": {
+          "type": "number"
+        },
+        "displayUnit": {
+          "$ref": "#/$defs/O11yDisplayUnit"
+        },
+        "publishLabelOptions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/O11yPublishLabelOptionProps"
+          },
+          "deprecated": true,
+          "description": "Use displayUnit instead."
+        },
+        "secondaryVisualization": {
+          "type": "string",
+          "enum": ["Linear", "None", "Radial", "Sparkline"]
+        },
+        "showTimestamp": {
+          "type": "boolean"
+        },
+        "trendDisplay": {
+          "type": "string",
+          "enum": ["absolute", "percent", "off"]
+        },
+        "noDataOptions": {
+          "$ref": "#/$defs/O11yNoDataOptionsProps"
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11yColorScale": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/O11yColorScaleItem"
+      }
+    },
+    "O11yColorScaleItem": {
+      "type": "object",
+      "properties": {
+        "paletteIndex": {
+          "type": "number"
+        },
+        "color": {
+          "type": "string"
+        },
+        "hashKey": {
+          "type": "string"
+        },
+        "gt": {
+          "type": ["number", "null"]
+        },
+        "gte": {
+          "type": ["number", "null"]
+        },
+        "lt": {
+          "type": ["number", "null"]
+        },
+        "lte": {
+          "type": ["number", "null"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11yDisplayUnit": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/O11yScalingUnit"
+        },
+        {
+          "$ref": "#/$defs/O11yDisplayUnitCustom"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "O11yScalingUnit": {
+      "type": "string",
+      "enum": [
+        "Bit",
+        "Kilobit",
+        "Megabit",
+        "Gigabit",
+        "Terabit",
+        "Petabit",
+        "Exabit",
+        "Zettabit",
+        "Yottabit",
+        "Byte",
+        "Kibibyte",
+        "Mebibyte",
+        "Gibibyte",
+        "Tebibyte",
+        "Pebibyte",
+        "Exbibyte",
+        "Zebibyte",
+        "Yobibyte",
+        "Nanosecond",
+        "Microsecond",
+        "Millisecond",
+        "Second",
+        "Minute",
+        "Hour",
+        "Day",
+        "Week"
+      ]
+    },
+    "O11yDisplayUnitCustom": {
+      "type": "object",
+      "properties": {
+        "prefix": {
+          "type": ["string", "null"]
+        },
+        "suffix": {
+          "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11yPublishLabelOptionProps": {
+      "type": "object",
+      "properties": {
+        "valuePrefix": {
+          "type": "string"
+        },
+        "valueSuffix": {
+          "type": "string"
+        },
+        "valueUnit": {
+          "$ref": "#/$defs/O11yScalingUnit"
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11yNoDataOptionsProps": {
+      "type": "object",
+      "properties": {
+        "linkText": {
+          "type": "string"
+        },
+        "linkUrl": {
+          "type": "string"
+        },
+        "noDataMessage": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11ySignalFlowDatasourceProps": {
+      "type": "object",
+      "properties": {
+        "program": {
+          "type": "string"
+        },
+        "maxDelay": {
+          "type": ["number", "null"]
+        },
+        "resolution": {
+          "type": ["number", "null"]
+        },
+        "minimumResolution": {
+          "type": ["number", "null"]
+        },
+        "sampleSize": {
+          "type": "number"
+        },
+        "backfillSliceCount": {
+          "type": "number"
+        },
+        "preferredEditor": {
+          "type": "string"
+        },
+        "time": {
+          "$ref": "#/$defs/O11yTimeRangeProps"
+        },
+        "events": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11yTimeRangeProps": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["absolute", "relative"]
+        },
+        "range": {
+          "type": "number"
+        },
+        "rangeEnd": {
+          "type": "number"
+        },
+        "start": {
+          "type": "number"
+        },
+        "end": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11yWidgetProps": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "aiGenerated": {
+          "type": "boolean"
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/O11yLinkProps"
+          }
+        },
+        "headerless": {
+          "type": "boolean"
+        },
+        "borderless": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "O11yLinkProps": {
+      "type": "object",
+      "properties": {
+        "external": {
+          "type": "boolean"
+        },
+        "label": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": ["url"],
+      "additionalProperties": false
+    }
+  }
+}

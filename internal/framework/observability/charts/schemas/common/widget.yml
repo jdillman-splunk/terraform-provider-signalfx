@@ -1,0 +1,30 @@
+# Copyright Splunk, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
+version: 1
+
+# Shared widget chrome, scoped to what existing classic configs actually set.
+#
+# Dropped after auditing terraform-monitoring:
+# - headerless/borderless: no classic equivalent at all, and both are behind
+#   Dashify feature flags. Cheap to add back if a real need shows up.
+# - drilldown_link: classic's nearest equivalent is signalfx_data_link, used
+#   4 times across the whole repo. Not worth schema surface yet.
+properties:
+  title:
+    type: string
+    optional: true
+    # classic: `name` (set on 100% of charts)
+    description: The chart's display title, shown above the chart content.
+    mapping:
+      path: ['widget', 'title']
+
+  description:
+    type: string
+    optional: true
+    # classic: `description` (~half of charts: 577/1224 single-value,
+    # 735/1763 list, 24/103 table)
+    description: >-
+      Extended text shown below the title describing the chart's purpose.
+    mapping:
+      path: ['widget', 'description']

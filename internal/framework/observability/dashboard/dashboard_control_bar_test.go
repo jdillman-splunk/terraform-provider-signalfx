@@ -1,7 +1,7 @@
 // Copyright Splunk, Inc.
 // SPDX-License-Identifier: MPL-2.0
 
-package fwobservability
+package dashboard
 
 import (
 	"context"
@@ -13,13 +13,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-testing/config"
-	testresource "github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/signalfx/signalfx-go/template"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/splunk-terraform/terraform-provider-signalfx/internal/framework/fwtest"
 )
 
 func TestDashifyControlBarSchemaAndModel(t *testing.T) {
@@ -108,8 +104,8 @@ func TestBuildAndParseDashifyControlBar(t *testing.T) {
 	require.NotNil(t, parsed)
 	assert.Equal(t, "-PT15M", parsed.TimeRange.DefaultVariableValue.ValueString())
 	assert.Equal(t, int64(60), parsed.Density.DefaultVariableValue.ValueInt64())
-	assert.Equal(t, false, parsed.TimeRange.Hidden.ValueBool())
-	assert.Equal(t, false, parsed.PinnedFilter[0].MatchMissing.ValueBool())
+	assert.False(t, parsed.TimeRange.Hidden.ValueBool())
+	assert.False(t, parsed.PinnedFilter[0].MatchMissing.ValueBool())
 	assert.NotNil(t, parsed.PinnedFilter[1].DefaultVariableValue)
 	assert.Empty(t, parsed.PinnedFilter[1].DefaultVariableValue)
 	assert.NotNil(t, parsed.FilterSet.Filter)
@@ -232,22 +228,6 @@ func TestDashifyControlBarAttributeValidators(t *testing.T) {
 	applicationMode := pinned["application_mode"].(schema.StringAttribute)
 	assertValidatorString(t, applicationMode.Validators, "override", false)
 	assertValidatorString(t, applicationMode.Validators, "replace_only", true)
-}
-
-func TestResourceObservabilityDashboardAllControlsConfig(t *testing.T) {
-	testresource.UnitTest(t, testresource.TestCase{
-		IsUnitTest: true,
-		ProtoV5ProviderFactories: fwtest.NewMockProto5Server(
-			t,
-			nil,
-			fwtest.WithMockResources(NewResourceObservabilityDashboard, NewResourceObservabilityTemplate),
-		),
-		Steps: []testresource.TestStep{{
-			ConfigFile:         config.StaticFile("testdata/observability_dashboard_controls.tf"),
-			PlanOnly:           true,
-			ExpectNonEmptyPlan: true,
-		}},
-	})
 }
 
 func TestBuildDashboardSpecOmitsAbsentControlBar(t *testing.T) {
