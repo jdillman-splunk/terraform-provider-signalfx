@@ -141,12 +141,66 @@ func (p MetricsTableColumnsModel) validationErrors(prefix string) []ValidationEr
 	return validationErrors
 }
 
+type MetricsTableLinksModel struct {
+	External types.Bool   `tfsdk:"external"`
+	Label    types.String `tfsdk:"label"`
+	Url      types.String `tfsdk:"url"`
+}
+
+func (p MetricsTableLinksModel) buildSpec() map[string]any {
+	out := map[string]any{}
+	if !p.External.IsNull() && !p.External.IsUnknown() {
+		setPath(out, []string{"external"}, p.External.ValueBool())
+	}
+	if !p.Label.IsNull() && !p.Label.IsUnknown() {
+		setPath(out, []string{"label"}, p.Label.ValueString())
+	}
+	if !p.Url.IsNull() && !p.Url.IsUnknown() {
+		setPath(out, []string{"url"}, p.Url.ValueString())
+	}
+	return out
+}
+
+func parseMetricsTableLinksModel(spec map[string]any) (MetricsTableLinksModel, error) {
+	var model MetricsTableLinksModel
+	var err error
+	if model.External, err = TakeBool(spec, []string{"external"}, Scalar); err != nil {
+		return model, err
+	}
+	if model.Label, err = TakeString(spec, []string{"label"}, Scalar); err != nil {
+		return model, err
+	}
+	if model.Url, err = TakeString(spec, []string{"url"}, Scalar); err != nil {
+		return model, err
+	}
+	return model, nil
+}
+
+func (p MetricsTableLinksModel) missingRequiredFields(prefix string) []string {
+	var missing []string
+	if p.Url.IsNull() {
+		missing = append(missing, prefix+".url")
+	}
+	return missing
+}
+
+func (p MetricsTableLinksModel) validationErrors(prefix string) []ValidationError {
+	var validationErrors []ValidationError
+	validationErrors = append(validationErrors, validateBool(validationPath(prefix, "external"), p.External, false)...)
+	validationErrors = append(validationErrors, validateString(validationPath(prefix, "label"), p.Label, false, 0, []string(nil)...)...)
+	validationErrors = append(validationErrors, validateString(validationPath(prefix, "url"), p.Url, true, 0, []string(nil)...)...)
+	return validationErrors
+}
+
 type MetricsTableModel struct {
+	Borderless               types.Bool                 `tfsdk:"borderless"`
 	Columns                  []MetricsTableColumnsModel `tfsdk:"columns"`
 	Description              types.String               `tfsdk:"description"`
 	DisableSampling          types.Bool                 `tfsdk:"disable_sampling"`
 	GroupBy                  types.String               `tfsdk:"group_by"`
+	Headerless               types.Bool                 `tfsdk:"headerless"`
 	HideMissingValues        types.Bool                 `tfsdk:"hide_missing_values"`
+	Links                    []MetricsTableLinksModel   `tfsdk:"links"`
 	MaxDelay                 types.Int64                `tfsdk:"max_delay"`
 	MaximumSignificantDigits types.Int64                `tfsdk:"maximum_significant_digits"`
 	MinimumResolution        types.Int64                `tfsdk:"minimum_resolution"`
@@ -159,11 +213,14 @@ type MetricsTableModel struct {
 
 func MetricsTableSchemaAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
+		"borderless":                 schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to hide the widget's border and background panel."},
 		"columns":                    schema.ListNestedAttribute{Optional: true, MarkdownDescription: "Per-column display overrides. Each entry corresponds to one SignalFlow publish label.", NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{"display_unit": schema.SingleNestedAttribute{Optional: true, MarkdownDescription: "How to scale and label displayed values: either a named unit (bits, bytes, or a time duration) or a custom prefix/suffix pair. Omit for no unit conversion or annotation.", Attributes: map[string]schema.Attribute{"prefix": schema.StringAttribute{Optional: true, MarkdownDescription: "Text shown immediately before each displayed value.", Validators: []validator.String{stringvalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("unit"))}}, "suffix": schema.StringAttribute{Optional: true, MarkdownDescription: "Text shown immediately after each displayed value.", Validators: []validator.String{stringvalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("unit"))}}, "unit": schema.StringAttribute{Optional: true, MarkdownDescription: "A named unit Splunk Observability Cloud scales the raw value by (e.g. 1000 bytes displays as \"1 Kilobyte\" when the unit is Byte).", Validators: []validator.String{stringvalidator.OneOf("Bit", "Kilobit", "Megabit", "Gigabit", "Terabit", "Petabit", "Exabit", "Zettabit", "Yottabit", "Byte", "Kibibyte", "Mebibyte", "Gibibyte", "Tebibyte", "Pebibyte", "Exbibyte", "Zebibyte", "Yobibyte", "Nanosecond", "Microsecond", "Millisecond", "Second", "Minute", "Hour", "Day", "Week"), stringvalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("prefix"), path.MatchRelative().AtParent().AtName("suffix"))}}}}, "enabled": schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether this column is shown."}, "field": schema.StringAttribute{Required: true, MarkdownDescription: "The SignalFlow publish label this column shows."}, "header_name": schema.StringAttribute{Optional: true, MarkdownDescription: "An alternate column header, in place of the raw publish label."}}}},
 		"description":                schema.StringAttribute{Optional: true, MarkdownDescription: "Extended text shown below the title describing the chart's purpose."},
 		"disable_sampling":           schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to sample fewer of the matched time series for better rendering performance. When disabled, more series are shown but the chart may load more slowly. Defaults to `false` when unset."},
 		"group_by":                   schema.StringAttribute{Optional: true, MarkdownDescription: "The metadata property to group table rows by."},
+		"headerless":                 schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to hide the widget header, including its title and description."},
 		"hide_missing_values":        schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to exclude a series whose most recent value is missing, and any series whose latest timestamp is older than the newest remaining series. Defaults to `false` when unset."},
+		"links":                      schema.ListNestedAttribute{Optional: true, MarkdownDescription: "Drilldown links for this widget. Only the first entry is rendered, as a magnifier button in the widget header.", NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{"external": schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to open the link in a new window and show an external-link icon. Implied when the target's origin differs from the app's."}, "label": schema.StringAttribute{Optional: true, MarkdownDescription: "Tooltip text shown when hovering the drilldown button."}, "url": schema.StringAttribute{Required: true, MarkdownDescription: "The link target. May contain {{{variable}}} placeholders, which are replaced with the dashboard's current filter values."}}}},
 		"max_delay":                  schema.Int64Attribute{Optional: true, MarkdownDescription: "Milliseconds to wait for late-arriving data points before charting what has arrived. 0 lets Splunk Observability Cloud choose automatically."},
 		"maximum_significant_digits": schema.Int64Attribute{Optional: true, MarkdownDescription: "The number of significant digits to display for values in this chart. Unset lets Splunk Observability Cloud adjust precision to fit the available space. Defaults to `4` when unset.", Validators: []validator.Int64{int64validator.AtLeast(1), int64validator.AtMost(20)}},
 		"minimum_resolution":         schema.Int64Attribute{Optional: true, MarkdownDescription: "The lowest resolution, in milliseconds, to use when computing the chart's SignalFlow program. 0 lets Splunk Observability Cloud choose automatically."},
@@ -180,6 +237,9 @@ func (p MetricsTableModel) MissingRequiredFields() []string {
 	for i, item := range p.Columns {
 		missing = append(missing, item.missingRequiredFields(fmt.Sprintf("columns.%d", i))...)
 	}
+	for i, item := range p.Links {
+		missing = append(missing, item.missingRequiredFields(fmt.Sprintf("links.%d", i))...)
+	}
 	if p.Program.IsNull() {
 		missing = append(missing, "program")
 	}
@@ -190,13 +250,18 @@ func (p MetricsTableModel) ValidationErrors() []ValidationError { return p.valid
 
 func (p MetricsTableModel) validationErrors(prefix string) []ValidationError {
 	var validationErrors []ValidationError
+	validationErrors = append(validationErrors, validateBool(validationPath(prefix, "borderless"), p.Borderless, false)...)
 	for index, item := range p.Columns {
 		validationErrors = append(validationErrors, item.validationErrors(fmt.Sprintf("%s.%d", validationPath(prefix, "columns"), index))...)
 	}
 	validationErrors = append(validationErrors, validateString(validationPath(prefix, "description"), p.Description, false, 0, []string(nil)...)...)
 	validationErrors = append(validationErrors, validateBool(validationPath(prefix, "disable_sampling"), p.DisableSampling, false)...)
 	validationErrors = append(validationErrors, validateString(validationPath(prefix, "group_by"), p.GroupBy, false, 0, []string(nil)...)...)
+	validationErrors = append(validationErrors, validateBool(validationPath(prefix, "headerless"), p.Headerless, false)...)
 	validationErrors = append(validationErrors, validateBool(validationPath(prefix, "hide_missing_values"), p.HideMissingValues, false)...)
+	for index, item := range p.Links {
+		validationErrors = append(validationErrors, item.validationErrors(fmt.Sprintf("%s.%d", validationPath(prefix, "links"), index))...)
+	}
 	validationErrors = append(validationErrors, validateInt64(validationPath(prefix, "max_delay"), p.MaxDelay, nil, nil)...)
 	validationErrors = append(validationErrors, validateInt64(validationPath(prefix, "maximum_significant_digits"), p.MaximumSignificantDigits, int64Pointer(1), int64Pointer(20))...)
 	validationErrors = append(validationErrors, validateInt64(validationPath(prefix, "minimum_resolution"), p.MinimumResolution, nil, nil)...)
@@ -215,6 +280,9 @@ func (p MetricsTableModel) BuildSpec() map[string]any {
 		"datasource":        map[string]any{},
 		"widget":            map[string]any{},
 	}
+	if !p.Borderless.IsNull() && !p.Borderless.IsUnknown() {
+		setPath(out, []string{"widget", "borderless"}, p.Borderless.ValueBool())
+	}
 	if p.Columns != nil {
 		values := make([]any, len(p.Columns))
 		for i, value := range p.Columns {
@@ -231,8 +299,18 @@ func (p MetricsTableModel) BuildSpec() map[string]any {
 	if !p.GroupBy.IsNull() && !p.GroupBy.IsUnknown() {
 		setPath(out, []string{"chart", "groupBy"}, []any{p.GroupBy.ValueString()})
 	}
+	if !p.Headerless.IsNull() && !p.Headerless.IsUnknown() {
+		setPath(out, []string{"widget", "headerless"}, p.Headerless.ValueBool())
+	}
 	if !p.HideMissingValues.IsNull() && !p.HideMissingValues.IsUnknown() {
 		setPath(out, []string{"chart", "hideMissingValues"}, p.HideMissingValues.ValueBool())
+	}
+	if p.Links != nil {
+		values := make([]any, len(p.Links))
+		for i, value := range p.Links {
+			values[i] = value.buildSpec()
+		}
+		setPath(out, []string{"widget", "links"}, values)
 	}
 	if !p.MaxDelay.IsNull() && !p.MaxDelay.IsUnknown() {
 		setPath(out, []string{"datasource", "maxDelay"}, p.MaxDelay.ValueInt64())
@@ -271,6 +349,9 @@ func ParseMetricsTableSpec(spec map[string]any) (MetricsTableModel, error) {
 
 	var model MetricsTableModel
 	var err error
+	if model.Borderless, err = TakeBool(spec, []string{"widget", "borderless"}, Scalar); err != nil {
+		return model, err
+	}
 	if model.Columns, err = TakeObjectList(spec, []string{"chart", "columns"}, parseMetricsTableColumnsModel); err != nil {
 		return model, err
 	}
@@ -283,7 +364,13 @@ func ParseMetricsTableSpec(spec map[string]any) (MetricsTableModel, error) {
 	if model.GroupBy, err = TakeString(spec, []string{"chart", "groupBy"}, WrappedInArray); err != nil {
 		return model, err
 	}
+	if model.Headerless, err = TakeBool(spec, []string{"widget", "headerless"}, Scalar); err != nil {
+		return model, err
+	}
 	if model.HideMissingValues, err = TakeBool(spec, []string{"chart", "hideMissingValues"}, Scalar); err != nil {
+		return model, err
+	}
+	if model.Links, err = TakeObjectList(spec, []string{"widget", "links"}, parseMetricsTableLinksModel); err != nil {
 		return model, err
 	}
 	if model.MaxDelay, err = TakeInt64(spec, []string{"datasource", "maxDelay"}, Scalar); err != nil {

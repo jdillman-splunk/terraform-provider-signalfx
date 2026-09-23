@@ -362,9 +362,7 @@ func TestUnknownOllyShapesNeverBecomeTypedState(t *testing.T) {
 	validButUncurated := map[string]any{
 		"<o11y:Text>": []any{},
 		"chart":       map[string]any{"markdown": "notes"},
-		"widget": map[string]any{
-			"links": []any{map[string]any{"url": "/runbook"}},
-		},
+		"widget":      map[string]any{"aiGenerated": true},
 	}
 	_, metadata, err := ParseContent("<o11y:Text>", validButUncurated)
 	if err != nil {
@@ -377,7 +375,7 @@ func TestUnknownOllyShapesNeverBecomeTypedState(t *testing.T) {
 	emptyUnknown := map[string]any{
 		"<o11y:Text>": []any{},
 		"chart":       map[string]any{"markdown": "notes"},
-		"widget":      map[string]any{"links": []any{}},
+		"datasource":  map[string]any{},
 	}
 	_, metadata, err = ParseContent("<o11y:Text>", emptyUnknown)
 	if err != nil {

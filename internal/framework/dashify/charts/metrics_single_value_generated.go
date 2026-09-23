@@ -149,10 +149,64 @@ func (p MetricsSingleValueDisplayUnitModel) validationErrors(prefix string) []Va
 	return validationErrors
 }
 
+type MetricsSingleValueLinksModel struct {
+	External types.Bool   `tfsdk:"external"`
+	Label    types.String `tfsdk:"label"`
+	Url      types.String `tfsdk:"url"`
+}
+
+func (p MetricsSingleValueLinksModel) buildSpec() map[string]any {
+	out := map[string]any{}
+	if !p.External.IsNull() && !p.External.IsUnknown() {
+		setPath(out, []string{"external"}, p.External.ValueBool())
+	}
+	if !p.Label.IsNull() && !p.Label.IsUnknown() {
+		setPath(out, []string{"label"}, p.Label.ValueString())
+	}
+	if !p.Url.IsNull() && !p.Url.IsUnknown() {
+		setPath(out, []string{"url"}, p.Url.ValueString())
+	}
+	return out
+}
+
+func parseMetricsSingleValueLinksModel(spec map[string]any) (MetricsSingleValueLinksModel, error) {
+	var model MetricsSingleValueLinksModel
+	var err error
+	if model.External, err = TakeBool(spec, []string{"external"}, Scalar); err != nil {
+		return model, err
+	}
+	if model.Label, err = TakeString(spec, []string{"label"}, Scalar); err != nil {
+		return model, err
+	}
+	if model.Url, err = TakeString(spec, []string{"url"}, Scalar); err != nil {
+		return model, err
+	}
+	return model, nil
+}
+
+func (p MetricsSingleValueLinksModel) missingRequiredFields(prefix string) []string {
+	var missing []string
+	if p.Url.IsNull() {
+		missing = append(missing, prefix+".url")
+	}
+	return missing
+}
+
+func (p MetricsSingleValueLinksModel) validationErrors(prefix string) []ValidationError {
+	var validationErrors []ValidationError
+	validationErrors = append(validationErrors, validateBool(validationPath(prefix, "external"), p.External, false)...)
+	validationErrors = append(validationErrors, validateString(validationPath(prefix, "label"), p.Label, false, 0, []string(nil)...)...)
+	validationErrors = append(validationErrors, validateString(validationPath(prefix, "url"), p.Url, true, 0, []string(nil)...)...)
+	return validationErrors
+}
+
 type MetricsSingleValueModel struct {
+	Borderless               types.Bool                          `tfsdk:"borderless"`
 	ColorScale               []MetricsSingleValueColorScaleModel `tfsdk:"color_scale"`
 	Description              types.String                        `tfsdk:"description"`
 	DisplayUnit              *MetricsSingleValueDisplayUnitModel `tfsdk:"display_unit"`
+	Headerless               types.Bool                          `tfsdk:"headerless"`
+	Links                    []MetricsSingleValueLinksModel      `tfsdk:"links"`
 	MaxDelay                 types.Int64                         `tfsdk:"max_delay"`
 	MaximumFractionDigits    types.Int64                         `tfsdk:"maximum_fraction_digits"`
 	MaximumSignificantDigits types.Int64                         `tfsdk:"maximum_significant_digits"`
@@ -167,9 +221,12 @@ type MetricsSingleValueModel struct {
 
 func MetricsSingleValueSchemaAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
+		"borderless":                 schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to hide the widget's border and background panel."},
 		"color_scale":                schema.ListNestedAttribute{Optional: true, MarkdownDescription: "Color bands applied to the displayed value based on which threshold range it falls in. Buckets are evaluated in the order given.", NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{"gt": schema.Float64Attribute{Optional: true, MarkdownDescription: "This bucket's lower bound, exclusive. Mutually exclusive with `gte`."}, "gte": schema.Float64Attribute{Optional: true, MarkdownDescription: "This bucket's lower bound, inclusive. Mutually exclusive with `gt`."}, "lt": schema.Float64Attribute{Optional: true, MarkdownDescription: "This bucket's upper bound, exclusive. Mutually exclusive with `lte`. Not settable in the Dashify editor."}, "lte": schema.Float64Attribute{Optional: true, MarkdownDescription: "This bucket's upper bound, inclusive. Mutually exclusive with `lt`. Not settable in the Dashify editor."}, "palette_index": schema.Int64Attribute{Optional: true, MarkdownDescription: "The palette color index (0-21) to draw this bucket in.", Validators: []validator.Int64{int64validator.AtLeast(0), int64validator.AtMost(21)}}}}, Validators: []validator.List{listvalidator.SizeAtMost(5)}},
 		"description":                schema.StringAttribute{Optional: true, MarkdownDescription: "Extended text shown below the title describing the chart's purpose."},
 		"display_unit":               schema.SingleNestedAttribute{Optional: true, MarkdownDescription: "How to scale and label displayed values: either a named unit (bits, bytes, or a time duration) or a custom prefix/suffix pair. Omit for no unit conversion or annotation.", Attributes: map[string]schema.Attribute{"prefix": schema.StringAttribute{Optional: true, MarkdownDescription: "Text shown immediately before each displayed value.", Validators: []validator.String{stringvalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("unit"))}}, "suffix": schema.StringAttribute{Optional: true, MarkdownDescription: "Text shown immediately after each displayed value.", Validators: []validator.String{stringvalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("unit"))}}, "unit": schema.StringAttribute{Optional: true, MarkdownDescription: "A named unit Splunk Observability Cloud scales the raw value by (e.g. 1000 bytes displays as \"1 Kilobyte\" when the unit is Byte).", Validators: []validator.String{stringvalidator.OneOf("Bit", "Kilobit", "Megabit", "Gigabit", "Terabit", "Petabit", "Exabit", "Zettabit", "Yottabit", "Byte", "Kibibyte", "Mebibyte", "Gibibyte", "Tebibyte", "Pebibyte", "Exbibyte", "Zebibyte", "Yobibyte", "Nanosecond", "Microsecond", "Millisecond", "Second", "Minute", "Hour", "Day", "Week"), stringvalidator.ConflictsWith(path.MatchRelative().AtParent().AtName("prefix"), path.MatchRelative().AtParent().AtName("suffix"))}}}},
+		"headerless":                 schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to hide the widget header, including its title and description."},
+		"links":                      schema.ListNestedAttribute{Optional: true, MarkdownDescription: "Drilldown links for this widget. Only the first entry is rendered, as a magnifier button in the widget header.", NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{"external": schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to open the link in a new window and show an external-link icon. Implied when the target's origin differs from the app's."}, "label": schema.StringAttribute{Optional: true, MarkdownDescription: "Tooltip text shown when hovering the drilldown button."}, "url": schema.StringAttribute{Required: true, MarkdownDescription: "The link target. May contain {{{variable}}} placeholders, which are replaced with the dashboard's current filter values."}}}},
 		"max_delay":                  schema.Int64Attribute{Optional: true, MarkdownDescription: "Milliseconds to wait for late-arriving data points before charting what has arrived. 0 lets Splunk Observability Cloud choose automatically."},
 		"maximum_fraction_digits":    schema.Int64Attribute{Optional: true, MarkdownDescription: "The maximum number of digits to display after the decimal point.", Validators: []validator.Int64{int64validator.AtLeast(0), int64validator.AtMost(20)}},
 		"maximum_significant_digits": schema.Int64Attribute{Optional: true, MarkdownDescription: "The number of significant digits to display for values in this chart. Unset lets Splunk Observability Cloud adjust precision to fit the available space. Defaults to `4` when unset.", Validators: []validator.Int64{int64validator.AtLeast(1), int64validator.AtMost(20)}},
@@ -188,6 +245,9 @@ func (p MetricsSingleValueModel) MissingRequiredFields() []string {
 	for i, item := range p.ColorScale {
 		missing = append(missing, item.missingRequiredFields(fmt.Sprintf("color_scale.%d", i))...)
 	}
+	for i, item := range p.Links {
+		missing = append(missing, item.missingRequiredFields(fmt.Sprintf("links.%d", i))...)
+	}
 	if p.Program.IsNull() {
 		missing = append(missing, "program")
 	}
@@ -198,6 +258,7 @@ func (p MetricsSingleValueModel) ValidationErrors() []ValidationError { return p
 
 func (p MetricsSingleValueModel) validationErrors(prefix string) []ValidationError {
 	var validationErrors []ValidationError
+	validationErrors = append(validationErrors, validateBool(validationPath(prefix, "borderless"), p.Borderless, false)...)
 	if p.ColorScale != nil && len(p.ColorScale) > 5 {
 		validationErrors = append(validationErrors, ValidationError{Path: validationPath(prefix, "color_scale"), Message: "must contain at most 5 item(s)"})
 	}
@@ -207,6 +268,10 @@ func (p MetricsSingleValueModel) validationErrors(prefix string) []ValidationErr
 	validationErrors = append(validationErrors, validateString(validationPath(prefix, "description"), p.Description, false, 0, []string(nil)...)...)
 	if p.DisplayUnit != nil {
 		validationErrors = append(validationErrors, p.DisplayUnit.validationErrors(validationPath(prefix, "display_unit"))...)
+	}
+	validationErrors = append(validationErrors, validateBool(validationPath(prefix, "headerless"), p.Headerless, false)...)
+	for index, item := range p.Links {
+		validationErrors = append(validationErrors, item.validationErrors(fmt.Sprintf("%s.%d", validationPath(prefix, "links"), index))...)
 	}
 	validationErrors = append(validationErrors, validateInt64(validationPath(prefix, "max_delay"), p.MaxDelay, nil, nil)...)
 	validationErrors = append(validationErrors, validateInt64(validationPath(prefix, "maximum_fraction_digits"), p.MaximumFractionDigits, int64Pointer(0), int64Pointer(20))...)
@@ -228,6 +293,9 @@ func (p MetricsSingleValueModel) BuildSpec() map[string]any {
 		"datasource":         map[string]any{},
 		"widget":             map[string]any{},
 	}
+	if !p.Borderless.IsNull() && !p.Borderless.IsUnknown() {
+		setPath(out, []string{"widget", "borderless"}, p.Borderless.ValueBool())
+	}
 	if p.ColorScale != nil {
 		values := make([]any, len(p.ColorScale))
 		for i, value := range p.ColorScale {
@@ -242,6 +310,16 @@ func (p MetricsSingleValueModel) BuildSpec() map[string]any {
 		if value := p.DisplayUnit.buildSpec(); value != nil {
 			setPath(out, []string{"chart", "displayUnit"}, value)
 		}
+	}
+	if !p.Headerless.IsNull() && !p.Headerless.IsUnknown() {
+		setPath(out, []string{"widget", "headerless"}, p.Headerless.ValueBool())
+	}
+	if p.Links != nil {
+		values := make([]any, len(p.Links))
+		for i, value := range p.Links {
+			values[i] = value.buildSpec()
+		}
+		setPath(out, []string{"widget", "links"}, values)
 	}
 	if !p.MaxDelay.IsNull() && !p.MaxDelay.IsUnknown() {
 		setPath(out, []string{"datasource", "maxDelay"}, p.MaxDelay.ValueInt64())
@@ -286,6 +364,9 @@ func ParseMetricsSingleValueSpec(spec map[string]any) (MetricsSingleValueModel, 
 
 	var model MetricsSingleValueModel
 	var err error
+	if model.Borderless, err = TakeBool(spec, []string{"widget", "borderless"}, Scalar); err != nil {
+		return model, err
+	}
 	if model.ColorScale, err = TakeObjectList(spec, []string{"chart", "colorScale"}, parseMetricsSingleValueColorScaleModel); err != nil {
 		return model, err
 	}
@@ -293,6 +374,12 @@ func ParseMetricsSingleValueSpec(spec map[string]any) (MetricsSingleValueModel, 
 		return model, err
 	}
 	if model.DisplayUnit, err = TakeOneOf(spec, []string{"chart", "displayUnit"}, parseMetricsSingleValueDisplayUnitModel); err != nil {
+		return model, err
+	}
+	if model.Headerless, err = TakeBool(spec, []string{"widget", "headerless"}, Scalar); err != nil {
+		return model, err
+	}
+	if model.Links, err = TakeObjectList(spec, []string{"widget", "links"}, parseMetricsSingleValueLinksModel); err != nil {
 		return model, err
 	}
 	if model.MaxDelay, err = TakeInt64(spec, []string{"datasource", "maxDelay"}, Scalar); err != nil {

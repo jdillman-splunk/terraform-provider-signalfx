@@ -4,58 +4,11 @@
 type: metrics_cluster_map
 version: 1
 description: >-
-  Terraform-facing schema for Dashify's o11y:ClusterMap chart - a grid of
-  colored cells, one per source, confirmed to be the real migration target
-  for classic `signalfx_heatmap_chart` (NOT Dashify's own newer, unrelated
-  `o11y:Heatmap` element, a time-bucketed histogram with ~0 classic usage;
-  see convertHeatmap.ts in app-modern-dashboards, which converts a classic
-  Heatmap chart's colorBy/colorScale/colorRange/groupBy straight into
-  `<o11y:ClusterMap>`). Scoped to what the 171 existing
-  signalfx_heatmap_chart resources in terraform-monitoring actually set,
-  cross-checked against ClusterMapConfigPanel.tsx (the real Dashify editor
-  for this chart type).
-
-# Permanent gap, confirmed to have no Dashify equivalent: classic `sort_by`
-# (158/171 - the single most common field on this chart, by far). ClusterMap
-# has no sort-order concept anywhere in ClusterMapProps or ClusterMapConfig -
-# cells are laid out by the query result order. A user who needs a specific
-# order has to encode it in the SignalFlow `program` itself (e.g. `top()`),
-# not through a chart-level field. This is a bigger real-usage gap than any
-# other permanent gap documented elsewhere in this schema catalog.
-#
-# Also permanent gaps, consistent with other chart types: classic
-# `timezone` (147/171) and `refresh_interval` (153/171) - see
-# common/signalfx_datasource.yml's file-level note. Classic `unit_prefix`
-# is 170/171 but always "Metric" (the default) and ClusterMapProps has no
-# unit-prefix concept at all, so it is dropped the same way the single-value
-# and list chart schemas drop it for their chart types.
-#
-# Dropped: classic boolean `disable_sampling` (170/171). Like every chart
-# type except TableChart, ClusterMap has no boolean sampling toggle - author
-# `sample_size` (common/signalfx_datasource.yml) directly instead. See that
-# file's note.
-#
-# Dropped: `no_data_options`, a real ClusterMapProps field, but 0 classic
-# usage (signalfx_heatmap_chart has no equivalent field at all) and not even
-# round-tripped by Dashify's own ClusterMap editor (`ClusterMap.ts`'s
-# `templateMatchingKeys` omits it) - i.e. saving other settings in the
-# Dashify UI silently drops it. Not worth schema surface under either the
-# classic-parity or editor-support rule.
-#
-# `display_unit` is a partial exception to the classic-parity rule: 0
-# classic usage (no viz_options/publishLabelOptions field exists on
-# signalfx_heatmap_chart), but it's a real, renderer-honored,
-# import-preserved ClusterMapProps field kept in
-# `templateMatchingKeys` - Dashify's own ClusterMap editor round-trips it
-# even though its panel has no control to author a new value. Kept anyway,
-# the same call the table schema makes for `hide_missing_values`: a one-line field
-# is cheaper than a capability gap, and Terraform authoring it directly is a
-# real value-add the native editor doesn't currently offer.
-#
-# No secondary_visualization or timestamp-footer wording drift: ClusterMap's
-# "Show timestamp in footer" control is the identical shared component (same
-# field name and default) used by SingleValue/List/Table - see
-# common/timestamp.yml.
+  A grid of colored cells, one cell per source, colored by the metric value.
+  This is the Dashify equivalent of the classic `signalfx_heatmap_chart`
+  resource. Cells are laid out in query-result order and there is no
+  chart-level sort option, so encode any required ordering in the SignalFlow
+  `program` itself, for example with `top()`.
 
 dashify:
   element:
@@ -84,11 +37,8 @@ properties:
     type: list
     optional: true
     max_items: 2
-    # classic: `group_by` (169/171; 64 of those set an explicitly empty
-    # list). Real Dashify field is a genuine string array, not the
-    # wrap-a-scalar trick the table schema's group_by uses - confirmed against
-    # ClusterMapConfigPanel.tsx's own MAX_GROUP_BY_SELECTIONS = 2, and no
-    # real classic resource sets more than 2 values either.
+    # A genuine string array, not the wrap-a-scalar trick the table schema's
+    # group_by uses. The editor caps selections at MAX_GROUP_BY_SELECTIONS = 2.
     description: >-
       Metadata properties to group cells by (in nesting order). At most two.
     mapping:
@@ -101,19 +51,13 @@ properties:
     optional: true
     default: Range
     values: [Range, Scale]
-    # classic: encoded implicitly (options.ColorBy defaults to "Range";
-    # becomes "Scale" only when a color_scale block is present - see
-    # getHeatmapOptionsChart). 135/171 real charts set color_scale (imply
-    # Scale), 1/171 sets color_range (imply Range with explicit bounds), and
-    # the remaining 35 rely on the Range default with auto min/max.
-    #
-    # Unlike the single-value chart's color_scale (where Dashify infers Scale mode
-    # from colorScale's mere presence, so no separate field is needed), this
-    # one is NOT cosmetic - confirmed against useColorMapping.tsx:
+    # Unlike the single-value chart's color_scale (where Dashify infers Scale
+    # mode from colorScale's mere presence, so no separate field is needed),
+    # this one is NOT cosmetic - confirmed against useColorMapping.tsx:
     # `colorBy === 'Scale' ? getScaleColorAccessor(...) : getRangeColor(...)`.
-    # A `color_scale` block with `color_by` left at its Range default
-    # renders in Range mode and silently ignores the buckets. Must be
-    # authored explicitly alongside whichever block is set.
+    # A `color_scale` block with `color_by` left at its Range default renders
+    # in Range mode and silently ignores the buckets. Must be authored
+    # explicitly alongside whichever block is set.
     description: >-
       How to color each cell: by threshold buckets (`color_scale`) or by a
       continuous palette range (`color_range`). Must be set to `Scale`
@@ -126,12 +70,8 @@ properties:
     type: block
     optional: true
     conflicts_with: [color_scale]
-    # classic: `color_range` (1/171 - the rarest field in this schema, by a
-    # wide margin, but modeled anyway since it's the real Range-side
-    # counterpart to color_scale and costs little). Classic's color_range is
-    # a literal hex color; Dashify has no free-color range, only three named
-    # sequential palettes, so the two don't map field-for-field - a classic
-    # hex value has no lossless equivalent in the current typed surface.
+    # The Range-side counterpart to color_scale. Dashify has no free-color
+    # range, only three named sequential palettes.
     description: >-
       A continuous color palette applied across the cells' actual value
       range. Only meaningful when `color_by` is `Range`.
@@ -173,10 +113,9 @@ properties:
     required_when:
       field: color_by
       value: Scale
-    # classic: 135/171 color_scale blocks, by far the dominant coloring mode
-    # for this chart type. Same bucket shape as the single-value/list charts'
-    # color_scale - see the single-value schema's comment for why lt/lte are
-    # modeled even though the editor doesn't author them.
+    # Same bucket shape as the single-value and list charts' color_scale - see
+    # the single-value schema for why lt/lte are modeled even though the editor
+    # doesn't author them.
     description: >-
       Color bands applied to each cell's value based on which threshold
       range it falls in. Only meaningful when `color_by` is `Scale`.
@@ -188,8 +127,6 @@ properties:
           type: float
           optional: true
           conflicts_with: [gte]
-          # Real thresholds are not always whole numbers - confirmed against
-          # terraform-monitoring (e.g. `gt = 0.5`, `gte = 99.9`).
           description: This bucket's lower bound, exclusive. Mutually exclusive with `gte`.
           mapping:
             path: ['gt']

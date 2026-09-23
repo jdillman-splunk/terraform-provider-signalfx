@@ -4,22 +4,9 @@
 type: metrics_single_value
 version: 1
 description: >-
-  Terraform-facing schema for Dashify's o11y:SingleValue chart, scoped to what
-  the 1240 existing signalfx_single_value_chart resources in
-  terraform-monitoring actually set. Fields with no classic equivalent, plus
-  deprecated/runtime-derived/JSON-only ones, are intentionally omitted.
-
-# Permanent gaps, confirmed to have no Dashify equivalent:
-# - classic `unit_prefix` (1171 active, all "Metric"/none binary): useKmg2
-#   only exists on TimeSeriesChart's chartOptions - SingleValueProps has no
-#   binary-unit toggle at all.
-# - classic per-plot `viz_options.display_name` (1181 active): SingleValue
-#   has no per-plot naming in Dashify. A single-value chart shows one value,
-#   so there is nothing to individually label the way a list or time-series
-#   chart's per-series names do.
-# - classic `refresh_interval` (272 active): see
-#   common/signalfx_datasource.yml's file-level note.
-# - classic `timezone` (56 active): see the same note.
+  A single current metric value, optionally paired with a sparkline or a
+  radial/linear gauge and a color scale. This is the Dashify equivalent of the
+  classic `signalfx_single_value_chart` resource.
 
 dashify:
   element:
@@ -55,10 +42,8 @@ properties:
       path: ['chart', 'maximumFractionDigits']
 
   display_unit:
-    # classic single-value charts have no per-plot viz_options concept; the
-    # legacy importer collapses viz_options[0]'s unit/prefix/suffix into
-    # this one chart-level field (SingleValueProps.displayUnit), which is
-    # the only display-unit control SingleValue actually has.
+    # Chart-level rather than per-plot: SingleValueProps.displayUnit is the
+    # only display-unit control SingleValue has.
     ref: common/display_unit.yml#display_unit
     optional: true
     mapping:
@@ -68,10 +53,8 @@ properties:
     type: list
     optional: true
     max_items: 5
-    # classic: 1235 color_scale blocks across single-value charts, the
-    # second-most-used nested block after viz_options. Classic pairs this with
-    # `color_by = "Scale"`; Dashify infers the same thing from colorScale
-    # being present, so color_by needs no separate field.
+    # Dashify infers Scale mode from colorScale being present, so this chart
+    # needs no separate color_by field.
     #
     # Each bucket sets one lower bound (gt or gte) plus a palette color.
     # Upper bounds (lt/lte) are not authored by the Dashify editor - it
@@ -89,8 +72,6 @@ properties:
           type: float
           optional: true
           conflicts_with: [gte]
-          # Real thresholds are not always whole numbers - confirmed against
-          # terraform-monitoring (e.g. `gt = 0.5`, `gte = 99.9`).
           description: >-
             This bucket's lower bound, exclusive. Mutually exclusive with
             `gte`.
@@ -109,8 +90,8 @@ properties:
           type: float
           optional: true
           conflicts_with: [lte]
-          # Import-preserved but not editor-authored - see the file note
-          # above.
+          # Import-preserved but not editor-authored - see the color_scale
+          # note above.
           description: >-
             This bucket's upper bound, exclusive. Mutually exclusive with
             `lte`. Not settable in the Dashify editor.

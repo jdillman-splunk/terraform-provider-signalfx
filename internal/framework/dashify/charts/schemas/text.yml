@@ -4,18 +4,10 @@
 type: text
 version: 1
 description: >-
-  Terraform-facing schema for Dashify's o11y:Text chart - a markdown/notes
-  widget with no metric plumbing. Scoped to the 1241 existing
-  signalfx_text_chart resources in terraform-monitoring, the largest single
-  chart-type gap before this schema existed: text charts are the third most
-  common classic chart type after time and list charts, mostly used for
-  runbook/notes widgets.
+  A markdown notes widget with no metric plumbing, commonly used for runbook
+  links and dashboard annotations. This is the Dashify equivalent of the
+  classic `signalfx_text_chart` resource.
 
-# The Olly contract permits an optional datasource and shared widget.links,
-# but neither is part of the deliberately curated Terraform text-chart
-# surface. `variables` is overwritten by the template from the dashboard's
-# own filters at render time, so it is runtime-derived and deliberately not
-# modeled here - authoring it would be a no-op.
 dashify:
   element:
     name: 'o11y:Text'
@@ -28,7 +20,6 @@ properties:
   markdown:
     type: string
     optional: true
-    # classic: `options.markdown` (1229/1241 - near-universal).
     description: >-
       The widget's body content, in GitHub-flavored Markdown or HTML.
     mapping:

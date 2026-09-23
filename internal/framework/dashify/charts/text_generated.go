@@ -6,19 +6,78 @@
 package charts
 
 import (
+	"fmt"
+
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
+type TextLinksModel struct {
+	External types.Bool   `tfsdk:"external"`
+	Label    types.String `tfsdk:"label"`
+	Url      types.String `tfsdk:"url"`
+}
+
+func (p TextLinksModel) buildSpec() map[string]any {
+	out := map[string]any{}
+	if !p.External.IsNull() && !p.External.IsUnknown() {
+		setPath(out, []string{"external"}, p.External.ValueBool())
+	}
+	if !p.Label.IsNull() && !p.Label.IsUnknown() {
+		setPath(out, []string{"label"}, p.Label.ValueString())
+	}
+	if !p.Url.IsNull() && !p.Url.IsUnknown() {
+		setPath(out, []string{"url"}, p.Url.ValueString())
+	}
+	return out
+}
+
+func parseTextLinksModel(spec map[string]any) (TextLinksModel, error) {
+	var model TextLinksModel
+	var err error
+	if model.External, err = TakeBool(spec, []string{"external"}, Scalar); err != nil {
+		return model, err
+	}
+	if model.Label, err = TakeString(spec, []string{"label"}, Scalar); err != nil {
+		return model, err
+	}
+	if model.Url, err = TakeString(spec, []string{"url"}, Scalar); err != nil {
+		return model, err
+	}
+	return model, nil
+}
+
+func (p TextLinksModel) missingRequiredFields(prefix string) []string {
+	var missing []string
+	if p.Url.IsNull() {
+		missing = append(missing, prefix+".url")
+	}
+	return missing
+}
+
+func (p TextLinksModel) validationErrors(prefix string) []ValidationError {
+	var validationErrors []ValidationError
+	validationErrors = append(validationErrors, validateBool(validationPath(prefix, "external"), p.External, false)...)
+	validationErrors = append(validationErrors, validateString(validationPath(prefix, "label"), p.Label, false, 0, []string(nil)...)...)
+	validationErrors = append(validationErrors, validateString(validationPath(prefix, "url"), p.Url, true, 0, []string(nil)...)...)
+	return validationErrors
+}
+
 type TextModel struct {
-	Description types.String `tfsdk:"description"`
-	Markdown    types.String `tfsdk:"markdown"`
-	Title       types.String `tfsdk:"title"`
+	Borderless  types.Bool       `tfsdk:"borderless"`
+	Description types.String     `tfsdk:"description"`
+	Headerless  types.Bool       `tfsdk:"headerless"`
+	Links       []TextLinksModel `tfsdk:"links"`
+	Markdown    types.String     `tfsdk:"markdown"`
+	Title       types.String     `tfsdk:"title"`
 }
 
 func TextSchemaAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
+		"borderless":  schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to hide the widget's border and background panel."},
 		"description": schema.StringAttribute{Optional: true, MarkdownDescription: "Extended text shown below the title describing the chart's purpose."},
+		"headerless":  schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to hide the widget header, including its title and description."},
+		"links":       schema.ListNestedAttribute{Optional: true, MarkdownDescription: "Drilldown links for this widget. Only the first entry is rendered, as a magnifier button in the widget header.", NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{"external": schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to open the link in a new window and show an external-link icon. Implied when the target's origin differs from the app's."}, "label": schema.StringAttribute{Optional: true, MarkdownDescription: "Tooltip text shown when hovering the drilldown button."}, "url": schema.StringAttribute{Required: true, MarkdownDescription: "The link target. May contain {{{variable}}} placeholders, which are replaced with the dashboard's current filter values."}}}},
 		"markdown":    schema.StringAttribute{Optional: true, MarkdownDescription: "The widget's body content, in GitHub-flavored Markdown or HTML."},
 		"title":       schema.StringAttribute{Optional: true, MarkdownDescription: "The chart's display title, shown above the chart content."},
 	}
@@ -26,6 +85,9 @@ func TextSchemaAttributes() map[string]schema.Attribute {
 
 func (p TextModel) MissingRequiredFields() []string {
 	var missing []string
+	for i, item := range p.Links {
+		missing = append(missing, item.missingRequiredFields(fmt.Sprintf("links.%d", i))...)
+	}
 	return missing
 }
 
@@ -33,7 +95,12 @@ func (p TextModel) ValidationErrors() []ValidationError { return p.validationErr
 
 func (p TextModel) validationErrors(prefix string) []ValidationError {
 	var validationErrors []ValidationError
+	validationErrors = append(validationErrors, validateBool(validationPath(prefix, "borderless"), p.Borderless, false)...)
 	validationErrors = append(validationErrors, validateString(validationPath(prefix, "description"), p.Description, false, 0, []string(nil)...)...)
+	validationErrors = append(validationErrors, validateBool(validationPath(prefix, "headerless"), p.Headerless, false)...)
+	for index, item := range p.Links {
+		validationErrors = append(validationErrors, item.validationErrors(fmt.Sprintf("%s.%d", validationPath(prefix, "links"), index))...)
+	}
 	validationErrors = append(validationErrors, validateString(validationPath(prefix, "markdown"), p.Markdown, false, 0, []string(nil)...)...)
 	validationErrors = append(validationErrors, validateString(validationPath(prefix, "title"), p.Title, false, 0, []string(nil)...)...)
 	return validationErrors
@@ -45,8 +112,21 @@ func (p TextModel) BuildSpec() map[string]any {
 		"chart":       map[string]any{},
 		"widget":      map[string]any{},
 	}
+	if !p.Borderless.IsNull() && !p.Borderless.IsUnknown() {
+		setPath(out, []string{"widget", "borderless"}, p.Borderless.ValueBool())
+	}
 	if !p.Description.IsNull() && !p.Description.IsUnknown() {
 		setPath(out, []string{"widget", "description"}, p.Description.ValueString())
+	}
+	if !p.Headerless.IsNull() && !p.Headerless.IsUnknown() {
+		setPath(out, []string{"widget", "headerless"}, p.Headerless.ValueBool())
+	}
+	if p.Links != nil {
+		values := make([]any, len(p.Links))
+		for i, value := range p.Links {
+			values[i] = value.buildSpec()
+		}
+		setPath(out, []string{"widget", "links"}, values)
 	}
 	if !p.Markdown.IsNull() && !p.Markdown.IsUnknown() {
 		setPath(out, []string{"chart", "markdown"}, p.Markdown.ValueString())
@@ -65,7 +145,16 @@ func ParseTextSpec(spec map[string]any) (TextModel, error) {
 
 	var model TextModel
 	var err error
+	if model.Borderless, err = TakeBool(spec, []string{"widget", "borderless"}, Scalar); err != nil {
+		return model, err
+	}
 	if model.Description, err = TakeString(spec, []string{"widget", "description"}, Scalar); err != nil {
+		return model, err
+	}
+	if model.Headerless, err = TakeBool(spec, []string{"widget", "headerless"}, Scalar); err != nil {
+		return model, err
+	}
+	if model.Links, err = TakeObjectList(spec, []string{"widget", "links"}, parseTextLinksModel); err != nil {
 		return model, err
 	}
 	if model.Markdown, err = TakeString(spec, []string{"chart", "markdown"}, Scalar); err != nil {

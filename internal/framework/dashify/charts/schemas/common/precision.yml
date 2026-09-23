@@ -3,12 +3,7 @@
 
 version: 1
 
-# Shared numeric precision control.
-#
-# Only significant digits is modeled: classic's `max_precision` maps to it and
-# is set on 1030/1175 single-value and 1738/1744 list charts. Dashify's
-# `maximumFractionDigits` has a UI control but no classic equivalent at all,
-# so it's left out under the classic-parity scoping rule.
+# Shared numeric precision control. Significant digits only.
 properties:
   maximum_significant_digits:
     type: number

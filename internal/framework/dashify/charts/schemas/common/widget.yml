@@ -3,18 +3,12 @@
 
 version: 1
 
-# Shared widget chrome, scoped to what existing classic configs actually set.
-#
-# Dropped after auditing terraform-monitoring:
-# - headerless/borderless: no classic equivalent at all, and both are behind
-#   Dashify feature flags. Cheap to add back if a real need shows up.
-# - drilldown_link: classic's nearest equivalent is signalfx_data_link, used
-#   4 times across the whole repo. Not worth schema surface yet.
+# Shared widget chrome. Every field here is available to all chart types:
+# O11yWidgetProps is identical across all six element contracts.
 properties:
   title:
     type: string
     optional: true
-    # classic: `name` (set on 100% of charts)
     description: The chart's display title, shown above the chart content.
     mapping:
       path: ['widget', 'title']
@@ -22,9 +16,61 @@ properties:
   description:
     type: string
     optional: true
-    # classic: `description` (~half of charts: 577/1224 single-value,
-    # 735/1763 list, 24/103 table)
     description: >-
       Extended text shown below the title describing the chart's purpose.
     mapping:
       path: ['widget', 'description']
+
+  links:
+    type: list
+    optional: true
+    # A bare list of URL strings does not work: Drilldown.tsx destructures
+    # `{ external, label, url }` off the first entry and renders nothing when
+    # the resulting url fails to parse - so a string entry silently produced no
+    # drilldown button at all.
+    description: >-
+      Drilldown links for this widget. Only the first entry is rendered, as a
+      magnifier button in the widget header.
+    mapping:
+      path: ['widget', 'links']
+    item:
+      properties:
+        url:
+          type: string
+          required: true
+          description: >-
+            The link target. May contain {{{variable}}} placeholders, which are
+            replaced with the dashboard's current filter values.
+          mapping:
+            path: ['url']
+        label:
+          type: string
+          optional: true
+          description: Tooltip text shown when hovering the drilldown button.
+          mapping:
+            path: ['label']
+        external:
+          type: bool
+          optional: true
+          description: >-
+            Whether to open the link in a new window and show an external-link
+            icon. Implied when the target's origin differs from the app's.
+          mapping:
+            path: ['external']
+
+  headerless:
+    type: bool
+    optional: true
+    # No default: leaving it unset omits the key rather than writing an
+    # explicit false into every document.
+    description: >-
+      Whether to hide the widget header, including its title and description.
+    mapping:
+      path: ['widget', 'headerless']
+
+  borderless:
+    type: bool
+    optional: true
+    description: Whether to hide the widget's border and background panel.
+    mapping:
+      path: ['widget', 'borderless']

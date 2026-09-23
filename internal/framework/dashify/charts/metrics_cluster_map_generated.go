@@ -183,13 +183,67 @@ func (p MetricsClusterMapDisplayUnitModel) validationErrors(prefix string) []Val
 	return validationErrors
 }
 
+type MetricsClusterMapLinksModel struct {
+	External types.Bool   `tfsdk:"external"`
+	Label    types.String `tfsdk:"label"`
+	Url      types.String `tfsdk:"url"`
+}
+
+func (p MetricsClusterMapLinksModel) buildSpec() map[string]any {
+	out := map[string]any{}
+	if !p.External.IsNull() && !p.External.IsUnknown() {
+		setPath(out, []string{"external"}, p.External.ValueBool())
+	}
+	if !p.Label.IsNull() && !p.Label.IsUnknown() {
+		setPath(out, []string{"label"}, p.Label.ValueString())
+	}
+	if !p.Url.IsNull() && !p.Url.IsUnknown() {
+		setPath(out, []string{"url"}, p.Url.ValueString())
+	}
+	return out
+}
+
+func parseMetricsClusterMapLinksModel(spec map[string]any) (MetricsClusterMapLinksModel, error) {
+	var model MetricsClusterMapLinksModel
+	var err error
+	if model.External, err = TakeBool(spec, []string{"external"}, Scalar); err != nil {
+		return model, err
+	}
+	if model.Label, err = TakeString(spec, []string{"label"}, Scalar); err != nil {
+		return model, err
+	}
+	if model.Url, err = TakeString(spec, []string{"url"}, Scalar); err != nil {
+		return model, err
+	}
+	return model, nil
+}
+
+func (p MetricsClusterMapLinksModel) missingRequiredFields(prefix string) []string {
+	var missing []string
+	if p.Url.IsNull() {
+		missing = append(missing, prefix+".url")
+	}
+	return missing
+}
+
+func (p MetricsClusterMapLinksModel) validationErrors(prefix string) []ValidationError {
+	var validationErrors []ValidationError
+	validationErrors = append(validationErrors, validateBool(validationPath(prefix, "external"), p.External, false)...)
+	validationErrors = append(validationErrors, validateString(validationPath(prefix, "label"), p.Label, false, 0, []string(nil)...)...)
+	validationErrors = append(validationErrors, validateString(validationPath(prefix, "url"), p.Url, true, 0, []string(nil)...)...)
+	return validationErrors
+}
+
 type MetricsClusterMapModel struct {
+	Borderless               types.Bool                         `tfsdk:"borderless"`
 	ColorBy                  types.String                       `tfsdk:"color_by"`
 	ColorRange               *MetricsClusterMapColorRangeModel  `tfsdk:"color_range"`
 	ColorScale               []MetricsClusterMapColorScaleModel `tfsdk:"color_scale"`
 	Description              types.String                       `tfsdk:"description"`
 	DisplayUnit              *MetricsClusterMapDisplayUnitModel `tfsdk:"display_unit"`
 	GroupBy                  []types.String                     `tfsdk:"group_by"`
+	Headerless               types.Bool                         `tfsdk:"headerless"`
+	Links                    []MetricsClusterMapLinksModel      `tfsdk:"links"`
 	MaxDelay                 types.Int64                        `tfsdk:"max_delay"`
 	MaximumSignificantDigits types.Int64                        `tfsdk:"maximum_significant_digits"`
 	MinimumResolution        types.Int64                        `tfsdk:"minimum_resolution"`
@@ -202,12 +256,15 @@ type MetricsClusterMapModel struct {
 
 func MetricsClusterMapSchemaAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
+		"borderless":                 schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to hide the widget's border and background panel."},
 		"color_by":                   schema.StringAttribute{Optional: true, MarkdownDescription: "How to color each cell: by threshold buckets (`color_scale`) or by a continuous palette range (`color_range`). Must be set to `Scale` for `color_scale` to have any visible effect - it is not inferred from `color_scale` being present. Defaults to `Range` when unset.", Validators: []validator.String{stringvalidator.OneOf("Range", "Scale")}},
 		"color_range":                schema.SingleNestedAttribute{Optional: true, MarkdownDescription: "A continuous color palette applied across the cells' actual value range. Only meaningful when `color_by` is `Range`.", Attributes: map[string]schema.Attribute{"max": schema.Float64Attribute{Optional: true, MarkdownDescription: "The value at the top of the palette range. Unset means Auto (derived from the live data's maximum each refresh)."}, "min": schema.Float64Attribute{Optional: true, MarkdownDescription: "The value at the bottom of the palette range. Unset means Auto (derived from the live data's minimum each refresh)."}, "palette": schema.StringAttribute{Required: true, MarkdownDescription: "The named color palette to shade cells with, light to dark.", Validators: []validator.String{stringvalidator.OneOf("temperature", "purple", "cyan")}}}},
 		"color_scale":                schema.ListNestedAttribute{Optional: true, MarkdownDescription: "Color bands applied to each cell's value based on which threshold range it falls in. Only meaningful when `color_by` is `Scale`.", NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{"gt": schema.Float64Attribute{Optional: true, MarkdownDescription: "This bucket's lower bound, exclusive. Mutually exclusive with `gte`."}, "gte": schema.Float64Attribute{Optional: true, MarkdownDescription: "This bucket's lower bound, inclusive. Mutually exclusive with `gt`."}, "lt": schema.Float64Attribute{Optional: true, MarkdownDescription: "This bucket's upper bound, exclusive. Mutually exclusive with `lte`. Not settable in the Dashify editor."}, "lte": schema.Float64Attribute{Optional: true, MarkdownDescription: "This bucket's upper bound, inclusive. Mutually exclusive with `lt`. Not settable in the Dashify editor."}, "palette_index": schema.Int64Attribute{Optional: true, MarkdownDescription: "The palette color index (0-21) to draw this bucket in.", Validators: []validator.Int64{int64validator.AtLeast(0), int64validator.AtMost(21)}}}}, Validators: []validator.List{listvalidator.SizeAtMost(5)}},
 		"description":                schema.StringAttribute{Optional: true, MarkdownDescription: "Extended text shown below the title describing the chart's purpose."},
 		"display_unit":               schema.SingleNestedAttribute{Optional: true, MarkdownDescription: "A literal prefix and/or suffix to attach to displayed values. At least one of prefix or suffix must be set when this object is present.", Attributes: map[string]schema.Attribute{"prefix": schema.StringAttribute{Optional: true, MarkdownDescription: "Text shown immediately before each displayed value."}, "suffix": schema.StringAttribute{Optional: true, MarkdownDescription: "Text shown immediately after each displayed value."}}},
 		"group_by":                   schema.ListAttribute{Optional: true, MarkdownDescription: "Metadata properties to group cells by (in nesting order). At most two.", ElementType: types.StringType, Validators: []validator.List{listvalidator.SizeAtMost(2)}},
+		"headerless":                 schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to hide the widget header, including its title and description."},
+		"links":                      schema.ListNestedAttribute{Optional: true, MarkdownDescription: "Drilldown links for this widget. Only the first entry is rendered, as a magnifier button in the widget header.", NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{"external": schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to open the link in a new window and show an external-link icon. Implied when the target's origin differs from the app's."}, "label": schema.StringAttribute{Optional: true, MarkdownDescription: "Tooltip text shown when hovering the drilldown button."}, "url": schema.StringAttribute{Required: true, MarkdownDescription: "The link target. May contain {{{variable}}} placeholders, which are replaced with the dashboard's current filter values."}}}},
 		"max_delay":                  schema.Int64Attribute{Optional: true, MarkdownDescription: "Milliseconds to wait for late-arriving data points before charting what has arrived. 0 lets Splunk Observability Cloud choose automatically."},
 		"maximum_significant_digits": schema.Int64Attribute{Optional: true, MarkdownDescription: "The number of significant digits to display for values in this chart. Unset lets Splunk Observability Cloud adjust precision to fit the available space. Defaults to `4` when unset.", Validators: []validator.Int64{int64validator.AtLeast(1), int64validator.AtMost(20)}},
 		"minimum_resolution":         schema.Int64Attribute{Optional: true, MarkdownDescription: "The lowest resolution, in milliseconds, to use when computing the chart's SignalFlow program. 0 lets Splunk Observability Cloud choose automatically."},
@@ -230,6 +287,9 @@ func (p MetricsClusterMapModel) MissingRequiredFields() []string {
 	if p.DisplayUnit != nil {
 		missing = append(missing, p.DisplayUnit.missingRequiredFields("display_unit")...)
 	}
+	for i, item := range p.Links {
+		missing = append(missing, item.missingRequiredFields(fmt.Sprintf("links.%d", i))...)
+	}
 	if p.Program.IsNull() {
 		missing = append(missing, "program")
 	}
@@ -240,6 +300,7 @@ func (p MetricsClusterMapModel) ValidationErrors() []ValidationError { return p.
 
 func (p MetricsClusterMapModel) validationErrors(prefix string) []ValidationError {
 	var validationErrors []ValidationError
+	validationErrors = append(validationErrors, validateBool(validationPath(prefix, "borderless"), p.Borderless, false)...)
 	validationErrors = append(validationErrors, validateString(validationPath(prefix, "color_by"), p.ColorBy, false, 0, []string{"Range", "Scale"}...)...)
 	if p.ColorRange != nil {
 		validationErrors = append(validationErrors, p.ColorRange.validationErrors(validationPath(prefix, "color_range"))...)
@@ -256,6 +317,10 @@ func (p MetricsClusterMapModel) validationErrors(prefix string) []ValidationErro
 	}
 	if p.GroupBy != nil && len(p.GroupBy) > 2 {
 		validationErrors = append(validationErrors, ValidationError{Path: validationPath(prefix, "group_by"), Message: "must contain at most 2 item(s)"})
+	}
+	validationErrors = append(validationErrors, validateBool(validationPath(prefix, "headerless"), p.Headerless, false)...)
+	for index, item := range p.Links {
+		validationErrors = append(validationErrors, item.validationErrors(fmt.Sprintf("%s.%d", validationPath(prefix, "links"), index))...)
 	}
 	validationErrors = append(validationErrors, validateInt64(validationPath(prefix, "max_delay"), p.MaxDelay, nil, nil)...)
 	validationErrors = append(validationErrors, validateInt64(validationPath(prefix, "maximum_significant_digits"), p.MaximumSignificantDigits, int64Pointer(1), int64Pointer(20))...)
@@ -284,6 +349,9 @@ func (p MetricsClusterMapModel) BuildSpec() map[string]any {
 		"datasource":        map[string]any{},
 		"widget":            map[string]any{},
 	}
+	if !p.Borderless.IsNull() && !p.Borderless.IsUnknown() {
+		setPath(out, []string{"widget", "borderless"}, p.Borderless.ValueBool())
+	}
 	if !p.ColorBy.IsNull() && !p.ColorBy.IsUnknown() {
 		setPath(out, []string{"chart", "colorBy"}, p.ColorBy.ValueString())
 	}
@@ -309,6 +377,16 @@ func (p MetricsClusterMapModel) BuildSpec() map[string]any {
 			values[i] = value.ValueString()
 		}
 		setPath(out, []string{"chart", "groupBy"}, values)
+	}
+	if !p.Headerless.IsNull() && !p.Headerless.IsUnknown() {
+		setPath(out, []string{"widget", "headerless"}, p.Headerless.ValueBool())
+	}
+	if p.Links != nil {
+		values := make([]any, len(p.Links))
+		for i, value := range p.Links {
+			values[i] = value.buildSpec()
+		}
+		setPath(out, []string{"widget", "links"}, values)
 	}
 	if !p.MaxDelay.IsNull() && !p.MaxDelay.IsUnknown() {
 		setPath(out, []string{"datasource", "maxDelay"}, p.MaxDelay.ValueInt64())
@@ -347,6 +425,9 @@ func ParseMetricsClusterMapSpec(spec map[string]any) (MetricsClusterMapModel, er
 
 	var model MetricsClusterMapModel
 	var err error
+	if model.Borderless, err = TakeBool(spec, []string{"widget", "borderless"}, Scalar); err != nil {
+		return model, err
+	}
 	if model.ColorBy, err = TakeString(spec, []string{"chart", "colorBy"}, Scalar); err != nil {
 		return model, err
 	}
@@ -363,6 +444,12 @@ func ParseMetricsClusterMapSpec(spec map[string]any) (MetricsClusterMapModel, er
 		return model, err
 	}
 	if model.GroupBy, err = TakeStringList(spec, []string{"chart", "groupBy"}); err != nil {
+		return model, err
+	}
+	if model.Headerless, err = TakeBool(spec, []string{"widget", "headerless"}, Scalar); err != nil {
+		return model, err
+	}
+	if model.Links, err = TakeObjectList(spec, []string{"widget", "links"}, parseMetricsClusterMapLinksModel); err != nil {
 		return model, err
 	}
 	if model.MaxDelay, err = TakeInt64(spec, []string{"datasource", "maxDelay"}, Scalar); err != nil {

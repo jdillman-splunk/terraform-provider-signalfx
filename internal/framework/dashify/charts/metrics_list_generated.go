@@ -136,6 +136,57 @@ func (p MetricsListDisplayFieldsModel) validationErrors(prefix string) []Validat
 	return validationErrors
 }
 
+type MetricsListLinksModel struct {
+	External types.Bool   `tfsdk:"external"`
+	Label    types.String `tfsdk:"label"`
+	Url      types.String `tfsdk:"url"`
+}
+
+func (p MetricsListLinksModel) buildSpec() map[string]any {
+	out := map[string]any{}
+	if !p.External.IsNull() && !p.External.IsUnknown() {
+		setPath(out, []string{"external"}, p.External.ValueBool())
+	}
+	if !p.Label.IsNull() && !p.Label.IsUnknown() {
+		setPath(out, []string{"label"}, p.Label.ValueString())
+	}
+	if !p.Url.IsNull() && !p.Url.IsUnknown() {
+		setPath(out, []string{"url"}, p.Url.ValueString())
+	}
+	return out
+}
+
+func parseMetricsListLinksModel(spec map[string]any) (MetricsListLinksModel, error) {
+	var model MetricsListLinksModel
+	var err error
+	if model.External, err = TakeBool(spec, []string{"external"}, Scalar); err != nil {
+		return model, err
+	}
+	if model.Label, err = TakeString(spec, []string{"label"}, Scalar); err != nil {
+		return model, err
+	}
+	if model.Url, err = TakeString(spec, []string{"url"}, Scalar); err != nil {
+		return model, err
+	}
+	return model, nil
+}
+
+func (p MetricsListLinksModel) missingRequiredFields(prefix string) []string {
+	var missing []string
+	if p.Url.IsNull() {
+		missing = append(missing, prefix+".url")
+	}
+	return missing
+}
+
+func (p MetricsListLinksModel) validationErrors(prefix string) []ValidationError {
+	var validationErrors []ValidationError
+	validationErrors = append(validationErrors, validateBool(validationPath(prefix, "external"), p.External, false)...)
+	validationErrors = append(validationErrors, validateString(validationPath(prefix, "label"), p.Label, false, 0, []string(nil)...)...)
+	validationErrors = append(validationErrors, validateString(validationPath(prefix, "url"), p.Url, true, 0, []string(nil)...)...)
+	return validationErrors
+}
+
 type MetricsListPublishedStreamsDisplayUnitModel struct {
 	Prefix types.String `tfsdk:"prefix"`
 	Suffix types.String `tfsdk:"suffix"`
@@ -294,11 +345,14 @@ func (p MetricsListSortModel) validationErrors(prefix string) []ValidationError 
 }
 
 type MetricsListModel struct {
+	Borderless               types.Bool                                  `tfsdk:"borderless"`
 	ColorBy                  types.String                                `tfsdk:"color_by"`
 	ColorScale               []MetricsListColorScaleModel                `tfsdk:"color_scale"`
 	Description              types.String                                `tfsdk:"description"`
 	DisplayFields            []MetricsListDisplayFieldsModel             `tfsdk:"display_fields"`
+	Headerless               types.Bool                                  `tfsdk:"headerless"`
 	HideMissingValues        types.Bool                                  `tfsdk:"hide_missing_values"`
+	Links                    []MetricsListLinksModel                     `tfsdk:"links"`
 	MaxDelay                 types.Int64                                 `tfsdk:"max_delay"`
 	MaximumSignificantDigits types.Int64                                 `tfsdk:"maximum_significant_digits"`
 	MinimumResolution        types.Int64                                 `tfsdk:"minimum_resolution"`
@@ -314,11 +368,14 @@ type MetricsListModel struct {
 
 func MetricsListSchemaAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
+		"borderless":                 schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to hide the widget's border and background panel."},
 		"color_by":                   schema.StringAttribute{Optional: true, MarkdownDescription: "How to assign series colors when no explicit `palette_index` is set: by dimension value, uniformly by metric, or by the value thresholds in `color_scale`. Defaults to `Metric` when unset.", Validators: []validator.String{stringvalidator.OneOf("Dimension", "Metric", "Scale")}},
 		"color_scale":                schema.ListNestedAttribute{Optional: true, MarkdownDescription: "Color bands applied to each series' value based on which threshold range it falls in. Only meaningful when `color_by` is `Scale`.", NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{"gt": schema.Float64Attribute{Optional: true, MarkdownDescription: "This bucket's lower bound, exclusive. Mutually exclusive with `gte`."}, "gte": schema.Float64Attribute{Optional: true, MarkdownDescription: "This bucket's lower bound, inclusive. Mutually exclusive with `gt`."}, "lt": schema.Float64Attribute{Optional: true, MarkdownDescription: "This bucket's upper bound, exclusive. Mutually exclusive with `lte`. Not settable in the Dashify editor."}, "lte": schema.Float64Attribute{Optional: true, MarkdownDescription: "This bucket's upper bound, inclusive. Mutually exclusive with `lt`. Not settable in the Dashify editor."}, "palette_index": schema.Int64Attribute{Optional: true, MarkdownDescription: "The palette color index to draw this bucket in.", Validators: []validator.Int64{int64validator.AtLeast(0), int64validator.AtMost(21)}}}}, Validators: []validator.List{listvalidator.SizeAtMost(5)}},
 		"description":                schema.StringAttribute{Optional: true, MarkdownDescription: "Extended text shown below the title describing the chart's purpose."},
 		"display_fields":             schema.ListNestedAttribute{Optional: true, MarkdownDescription: "Which metadata properties to show as columns, and whether each is shown. Unset means \"Auto\" (Dashify infers fields from the live result) rather than an empty custom list.", NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{"enabled": schema.BoolAttribute{Required: true, MarkdownDescription: "Whether this property's column is shown."}, "property": schema.StringAttribute{Required: true, MarkdownDescription: "The metadata property's key name."}}}},
+		"headerless":                 schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to hide the widget header, including its title and description."},
 		"hide_missing_values":        schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to exclude a series whose most recent value is missing, and any series whose latest timestamp is older than the newest remaining series. Defaults to `false` when unset."},
+		"links":                      schema.ListNestedAttribute{Optional: true, MarkdownDescription: "Drilldown links for this widget. Only the first entry is rendered, as a magnifier button in the widget header.", NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{"external": schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to open the link in a new window and show an external-link icon. Implied when the target's origin differs from the app's."}, "label": schema.StringAttribute{Optional: true, MarkdownDescription: "Tooltip text shown when hovering the drilldown button."}, "url": schema.StringAttribute{Required: true, MarkdownDescription: "The link target. May contain {{{variable}}} placeholders, which are replaced with the dashboard's current filter values."}}}},
 		"max_delay":                  schema.Int64Attribute{Optional: true, MarkdownDescription: "Milliseconds to wait for late-arriving data points before charting what has arrived. 0 lets Splunk Observability Cloud choose automatically."},
 		"maximum_significant_digits": schema.Int64Attribute{Optional: true, MarkdownDescription: "The number of significant digits to display for values in this chart. Unset lets Splunk Observability Cloud adjust precision to fit the available space. Defaults to `4` when unset.", Validators: []validator.Int64{int64validator.AtLeast(1), int64validator.AtMost(20)}},
 		"minimum_resolution":         schema.Int64Attribute{Optional: true, MarkdownDescription: "The lowest resolution, in milliseconds, to use when computing the chart's SignalFlow program. 0 lets Splunk Observability Cloud choose automatically."},
@@ -341,6 +398,9 @@ func (p MetricsListModel) MissingRequiredFields() []string {
 	for i, item := range p.DisplayFields {
 		missing = append(missing, item.missingRequiredFields(fmt.Sprintf("display_fields.%d", i))...)
 	}
+	for i, item := range p.Links {
+		missing = append(missing, item.missingRequiredFields(fmt.Sprintf("links.%d", i))...)
+	}
 	if p.Program.IsNull() {
 		missing = append(missing, "program")
 	}
@@ -357,6 +417,7 @@ func (p MetricsListModel) ValidationErrors() []ValidationError { return p.valida
 
 func (p MetricsListModel) validationErrors(prefix string) []ValidationError {
 	var validationErrors []ValidationError
+	validationErrors = append(validationErrors, validateBool(validationPath(prefix, "borderless"), p.Borderless, false)...)
 	validationErrors = append(validationErrors, validateString(validationPath(prefix, "color_by"), p.ColorBy, false, 0, []string{"Dimension", "Metric", "Scale"}...)...)
 	if p.ColorScale != nil && len(p.ColorScale) > 5 {
 		validationErrors = append(validationErrors, ValidationError{Path: validationPath(prefix, "color_scale"), Message: "must contain at most 5 item(s)"})
@@ -368,7 +429,11 @@ func (p MetricsListModel) validationErrors(prefix string) []ValidationError {
 	for index, item := range p.DisplayFields {
 		validationErrors = append(validationErrors, item.validationErrors(fmt.Sprintf("%s.%d", validationPath(prefix, "display_fields"), index))...)
 	}
+	validationErrors = append(validationErrors, validateBool(validationPath(prefix, "headerless"), p.Headerless, false)...)
 	validationErrors = append(validationErrors, validateBool(validationPath(prefix, "hide_missing_values"), p.HideMissingValues, false)...)
+	for index, item := range p.Links {
+		validationErrors = append(validationErrors, item.validationErrors(fmt.Sprintf("%s.%d", validationPath(prefix, "links"), index))...)
+	}
 	validationErrors = append(validationErrors, validateInt64(validationPath(prefix, "max_delay"), p.MaxDelay, nil, nil)...)
 	validationErrors = append(validationErrors, validateInt64(validationPath(prefix, "maximum_significant_digits"), p.MaximumSignificantDigits, int64Pointer(1), int64Pointer(20))...)
 	validationErrors = append(validationErrors, validateInt64(validationPath(prefix, "minimum_resolution"), p.MinimumResolution, nil, nil)...)
@@ -401,6 +466,9 @@ func (p MetricsListModel) BuildSpec() map[string]any {
 		"datasource":  map[string]any{},
 		"widget":      map[string]any{},
 	}
+	if !p.Borderless.IsNull() && !p.Borderless.IsUnknown() {
+		setPath(out, []string{"widget", "borderless"}, p.Borderless.ValueBool())
+	}
 	if !p.ColorBy.IsNull() && !p.ColorBy.IsUnknown() {
 		setPath(out, []string{"chart", "colorBy"}, p.ColorBy.ValueString())
 	}
@@ -421,8 +489,18 @@ func (p MetricsListModel) BuildSpec() map[string]any {
 		}
 		setPath(out, []string{"chart", "displayFields"}, values)
 	}
+	if !p.Headerless.IsNull() && !p.Headerless.IsUnknown() {
+		setPath(out, []string{"widget", "headerless"}, p.Headerless.ValueBool())
+	}
 	if !p.HideMissingValues.IsNull() && !p.HideMissingValues.IsUnknown() {
 		setPath(out, []string{"chart", "hideMissingValues"}, p.HideMissingValues.ValueBool())
+	}
+	if p.Links != nil {
+		values := make([]any, len(p.Links))
+		for i, value := range p.Links {
+			values[i] = value.buildSpec()
+		}
+		setPath(out, []string{"widget", "links"}, values)
 	}
 	if !p.MaxDelay.IsNull() && !p.MaxDelay.IsUnknown() {
 		setPath(out, []string{"datasource", "maxDelay"}, p.MaxDelay.ValueInt64())
@@ -474,6 +552,9 @@ func ParseMetricsListSpec(spec map[string]any) (MetricsListModel, error) {
 
 	var model MetricsListModel
 	var err error
+	if model.Borderless, err = TakeBool(spec, []string{"widget", "borderless"}, Scalar); err != nil {
+		return model, err
+	}
 	if model.ColorBy, err = TakeString(spec, []string{"chart", "colorBy"}, Scalar); err != nil {
 		return model, err
 	}
@@ -486,7 +567,13 @@ func ParseMetricsListSpec(spec map[string]any) (MetricsListModel, error) {
 	if model.DisplayFields, err = TakeObjectList(spec, []string{"chart", "displayFields"}, parseMetricsListDisplayFieldsModel); err != nil {
 		return model, err
 	}
+	if model.Headerless, err = TakeBool(spec, []string{"widget", "headerless"}, Scalar); err != nil {
+		return model, err
+	}
 	if model.HideMissingValues, err = TakeBool(spec, []string{"chart", "hideMissingValues"}, Scalar); err != nil {
+		return model, err
+	}
+	if model.Links, err = TakeObjectList(spec, []string{"widget", "links"}, parseMetricsListLinksModel); err != nil {
 		return model, err
 	}
 	if model.MaxDelay, err = TakeInt64(spec, []string{"datasource", "maxDelay"}, Scalar); err != nil {

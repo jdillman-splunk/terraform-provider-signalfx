@@ -4,23 +4,12 @@
 type: metrics_list
 version: 1
 description: >-
-  Terraform-facing schema for Dashify's o11y:List chart, scoped to what the
-  1806 existing signalfx_list_chart resources in terraform-monitoring actually
-  set. Fields with no classic equivalent, plus deprecated/runtime-derived/
-  JSON-only ones, are intentionally omitted.
-
-# Permanent gaps, confirmed to have no Dashify equivalent: classic
-# `unit_prefix` (List has no binary-unit toggle - see the single-value schema's
-# note), `refresh_interval`, and `timezone` (see
-# common/signalfx_datasource.yml's file-level note).
-#
-# Known editor round-trip gap: `color_by` and `color_scale` below are real,
-# render-honored, import-preserved List fields, but the Dashify Widget
-# Builder's own save path (VizConfig/List.ts) doesn't include them in what it
-# writes back, so editing this chart's *other* settings in the Dashify UI and
-# saving will silently drop them. Modeled anyway because the alternative -
-# omitting a field 1764 real charts set - is a much larger and more certain
-# parity loss than a UI-save edge case.
+  A list of metric values, one row per series, with optional sorting and a
+  secondary sparkline or gauge per row. This is the Dashify equivalent of the
+  classic `signalfx_list_chart` resource. Note that `color_by` and
+  `color_scale` render correctly and survive import, but the Dashify UI does
+  not write them back when saving, so editing this chart in the UI will drop
+  them.
 
 dashify:
   element:
@@ -50,7 +39,6 @@ properties:
     type: bool
     optional: true
     default: false
-    # classic: `hide_missing_values` (1709/1709 - always explicitly set)
     description: >-
       Whether to exclude a series whose most recent value is missing, and
       any series whose latest timestamp is older than the newest remaining
@@ -63,9 +51,7 @@ properties:
     optional: true
     default: Metric
     values: [Dimension, Metric, Scale]
-    # classic: `color_by` (1764/1806). `Scale` pairs with `color_scale`
-    # below; Dashify's own default is Metric, though classic authors set
-    # Dimension far more often (1513 of 1764).
+    # `Scale` pairs with `color_scale` below.
     description: >-
       How to assign series colors when no explicit `palette_index` is set:
       by dimension value, uniformly by metric, or by the value thresholds in
@@ -83,9 +69,9 @@ properties:
     required_when:
       field: color_by
       value: Scale
-    # classic: 137 color_scale blocks, always paired with color_by = "Scale".
-    # Same bucket shape as the single-value chart's color_scale - see its comment
-    # for why lt/lte are modeled even though the editor doesn't author them.
+    # Same bucket shape as the single-value chart's color_scale - see its
+    # comment for why lt/lte are modeled even though the editor doesn't author
+    # them.
     description: >-
       Color bands applied to each series' value based on which threshold
       range it falls in. Only meaningful when `color_by` is `Scale`.
@@ -97,8 +83,6 @@ properties:
           type: float
           optional: true
           conflicts_with: [gte]
-          # Real thresholds are not always whole numbers - confirmed against
-          # terraform-monitoring (e.g. `gt = 0.5`, `gte = 99.9`).
           description: This bucket's lower bound, exclusive. Mutually exclusive with `gte`.
           mapping:
             path: ['gt']
@@ -143,10 +127,9 @@ properties:
       Which metadata properties to show as columns, and whether each is
       shown. Unset means "Auto" (Dashify infers fields from the live
       result) rather than an empty custom list.
-    # classic: `legend_options_fields` blocks - 5636 of them across list
-    # charts, field-for-field identical ({property, enabled}). Unset means
-    # "Auto" (Dashify infers fields from the live result) rather than an empty
-    # custom list, so the provider must distinguish unset from empty.
+    # Unset means "Auto" (Dashify infers fields from the live result) rather
+    # than an empty custom list, so the provider must distinguish unset from
+    # empty.
     mapping:
       path: ['chart', 'displayFields']
     item:
@@ -170,10 +153,7 @@ properties:
     description: >-
       How to order rows. Unset means "Auto" (sorted by the SignalFlow
       publish label, ascending).
-    # classic: `sort_by` (1391/1742), encoded as a sign-prefixed string -
-    # "-value" (1081), "+value" (113), "+sf_metric", "-name", etc. Dashify
-    # splits that into by + direction, so the serializer parses the sign off
-    # rather than passing the string through. Unset means "Auto".
+    # Dashify splits sort into by + direction. Unset means "Auto".
     mapping:
       path: ['chart', 'sort']
     properties:

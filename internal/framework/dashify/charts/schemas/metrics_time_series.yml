@@ -4,37 +4,11 @@
 type: metrics_time_series
 version: 1
 description: >-
-  Basic Terraform-facing schema for Dashify's o11y:TimeSeriesChart. It covers
-  the common editor-supported path: SignalFlow, line/area/column rendering,
-  stacking, legends, markers, two Y axes, and per-series display overrides.
-  Advanced or unstable chart properties remain available through an
-  observability_template rather than an open-ended merge bag.
-
-# The existing-resource inventory supports this cutoff: virtually every chart
-# uses line, area, or column rendering; advanced legend-field blocks occur on
-# roughly 13% and event-option blocks on roughly 1%. That leaves a comfortable
-# basic 80% path without pretending every legacy option belongs in this schema.
-#
-# Permanent gaps, confirmed to have no Dashify equivalent (see
-# common/signalfx_datasource.yml for the shared `timezone` gap note):
-# - classic `axes_include_zero` (895 active uses): not in Dashify's
-#   chartOptions or per-axis YAxisOptions; the classic->Dashify importer
-#   deliberately drops it rather than approximating it with min/max.
-# - classic `event_options { label, display_name, color }` (501 active
-#   uses): Dashify's event annotation config is render-only React state, not
-#   part of the serialized document; only the event query
-#   (`datasource.events.query`) is persisted, and this schema doesn't model
-#   event overlays at all yet.
-# - classic `histogram_options.color_theme`: a classic Histogram plot type
-#   converts to a *different* Dashify element (o11y:Heatmap, chart.palette),
-#   not a TimeSeriesChart property - heatmap charts are out of scope for now
-#   so this never reaches this schema.
-# - classic `refresh_interval`: converted away into datasource
-#   resolution/backfill on import; nothing in the serialized document
-#   corresponds to it for a time-series chart.
-# - classic `start_time`/`end_time` absolute ranges: declared on 1127
-#   dashboards but non-null on only 49 time charts real-world; only relative
-#   ranges are modeled (see `time_range` on the shared datasource fragment).
+  A time-series chart plotting SignalFlow output over time. Supports line,
+  area, and column rendering, stacking, legends, markers, two Y axes, and
+  per-series display overrides. This is the Dashify equivalent of the classic
+  `signalfx_time_chart` resource. Chart properties outside this set are not
+  modeled here; use `signalfx_observability_template` to author them directly.
 
 dashify:
   element:
@@ -242,43 +216,6 @@ properties:
       in place of the default empty-chart state.
     mapping:
       path: ['chart', 'noDataOptions', 'noDataMessage']
-
-  links:
-    type: list
-    optional: true
-    # A bare list of URL strings does not work: Drilldown.tsx destructures
-    # `{ external, label, url }` off the first entry and renders nothing when
-    # the resulting url fails to parse - so a string entry silently produced no
-    # drilldown button at all.
-    description: >-
-      Drilldown links for this widget. Only the first entry is rendered, as a
-      magnifier button in the widget header.
-    mapping:
-      path: ['widget', 'links']
-    item:
-      properties:
-        url:
-          type: string
-          required: true
-          description: >-
-            The link target. May contain {{{variable}}} placeholders, which are
-            replaced with the dashboard's current filter values.
-          mapping:
-            path: ['url']
-        label:
-          type: string
-          optional: true
-          description: Tooltip text shown when hovering the drilldown button.
-          mapping:
-            path: ['label']
-        external:
-          type: bool
-          optional: true
-          description: >-
-            Whether to open the link in a new window and show an external-link
-            icon. Implied when the target's origin differs from the app's.
-          mapping:
-            path: ['external']
 
   y_axes:
     type: list

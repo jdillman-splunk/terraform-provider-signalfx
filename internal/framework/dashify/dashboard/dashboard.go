@@ -72,7 +72,7 @@ func dashifyContainerBlocks(level dashifyContainerLevel) map[string]schema.Block
 	blocks := charts.ContentBlocks()
 	blocks["layout"] = dashifyItemLayoutBlock()
 	blocks["template"] = schema.SingleNestedBlock{
-		Description: "Dashboard content supplied by either a reusable Observability Template reference or a raw inline dashboard JSON object.",
+		Description: "Container content sourced from an existing dashboard document, either as a reusable Observability Template reference or as a raw inline dashboard JSON object. Use the typed chart blocks instead to declare a chart directly in Terraform.",
 		Attributes: map[string]schema.Attribute{
 			"template_id": schema.StringAttribute{Optional: true, Description: "ID of the referenced Template."},
 			"content": schema.StringAttribute{
@@ -87,7 +87,7 @@ func dashifyContainerBlocks(level dashifyContainerLevel) map[string]schema.Block
 	rule := dashifyContainerLevelRules[level]
 	if rule.allowSection {
 		blocks["section"] = schema.SingleNestedBlock{
-			Description: "A section containing containers and optional groups.",
+			Description: "A section wrapping an ordered list of containers. Those containers may hold charts, templates, or groups, but not further sections.",
 			Attributes: map[string]schema.Attribute{
 				"title": schema.StringAttribute{
 					Optional:    true,
@@ -111,7 +111,7 @@ func dashifyContainerBlocks(level dashifyContainerLevel) map[string]schema.Block
 	}
 	if rule.allowGroup {
 		blocks["group"] = schema.SingleNestedBlock{
-			Description: "A group containing related containers.",
+			Description: "A group wrapping an ordered list of related containers. Those containers may hold charts or templates, but not further sections or groups.",
 			Attributes: map[string]schema.Attribute{
 				"title": schema.StringAttribute{
 					Optional:    true,

@@ -5,23 +5,9 @@ version: 1
 
 # Shared per-plot overrides, keyed by SignalFlow publish label.
 #
-# This is classic's `viz_options` block, which is the single most-used nested
-# block in terraform-monitoring: 1894 blocks across single-value charts, 3995
-# across list charts, 193 across table charts. Field-for-field:
-#
-#   classic viz_options        ->  Dashify publishedStreams[<label>]
-#   label                      ->  (the map key itself)
-#   display_name               ->  name
-#   value_unit/prefix/suffix   ->  displayUnit (unit or custom variant)
-#   color                      ->  paletteIndex
-#   axis, plot_type            ->  time-chart only, not modeled here
-#
-# Only extended by the list chart now. SingleValue has no publishedStreams concept
-# at all in Dashify (it takes one chart-level display_unit instead - see
-# the single-value schema) and TableChart's publishedStreams is typed but never read
-# by the renderer or written by the importer (it derives per-column display
-# from `columns` instead - see the table schema). Extending this fragment for either
-# of those chart types would write JSON Dashify silently ignores.
+# Extended by the list chart only. SingleValue has no publishedStreams concept,
+# and TableChart types it but never reads or writes it, so extending this
+# fragment for either would write JSON Dashify silently ignores.
 properties:
   published_streams:
     # A map keyed by publish label ("A", "B"), not a list - the key must match
@@ -39,7 +25,6 @@ properties:
         name:
           type: string
           optional: true
-          # classic: viz_options.display_name (6210/6264 - near-universal)
           description: >-
             An alternate display name for this plot, shown in the legend and
             data table in place of its raw SignalFlow label.
@@ -47,8 +32,6 @@ properties:
             path: ['name']
 
         display_unit:
-          # classic: viz_options.value_unit (1152), value_suffix (287),
-          # value_prefix (17 - rare, but the same oneof covers it)
           ref: common/display_unit.yml#display_unit
           optional: true
           mapping:
@@ -59,9 +42,8 @@ properties:
           optional: true
           min: 0
           max: 15
-          # classic: viz_options.color (802), a color *name* string like
-          # "blue" - the serializer maps names to palette indices, since the
-          # Dashify color picker only ever emits paletteIndex.
+          # An index, not a color string: Dashify's color picker only ever
+          # emits paletteIndex.
           description: >-
             The palette color index (0-15) to draw this plot in, overriding
             the chart's automatic color assignment.

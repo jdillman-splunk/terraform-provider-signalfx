@@ -4,9 +4,8 @@
 version: 1
 
 # Shared display-unit oneof. Not meant to be `extends`ed at a chart root:
-# classic configs set units per-plot (viz_options.value_unit/value_prefix/
-# value_suffix), never chart-wide except where a chart has no per-plot
-# concept at all (SingleValue) - see the referencing site's own comment.
+# units belong to a plot, except on SingleValue, which has no per-plot concept
+# at all - see the referencing site's own comment.
 #
 #   display_unit:
 #     ref: common/display_unit.yml#display_unit

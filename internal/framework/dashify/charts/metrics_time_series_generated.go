@@ -359,9 +359,11 @@ func (p MetricsTimeSeriesYAxesModel) validationErrors(prefix string) []Validatio
 type MetricsTimeSeriesModel struct {
 	AdditionalProperties      []MetricsTimeSeriesAdditionalPropertiesModel `tfsdk:"additional_properties"`
 	BackfillSliceCount        types.Int64                                  `tfsdk:"backfill_slice_count"`
+	Borderless                types.Bool                                   `tfsdk:"borderless"`
 	CanToggleSeriesVisibility types.Bool                                   `tfsdk:"can_toggle_series_visibility"`
 	ColorBy                   types.String                                 `tfsdk:"color_by"`
 	Description               types.String                                 `tfsdk:"description"`
+	Headerless                types.Bool                                   `tfsdk:"headerless"`
 	HideMissingValues         types.Bool                                   `tfsdk:"hide_missing_values"`
 	LegendDimension           types.String                                 `tfsdk:"legend_dimension"`
 	LegendPosition            types.String                                 `tfsdk:"legend_position"`
@@ -392,9 +394,11 @@ func MetricsTimeSeriesSchemaAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"additional_properties":        schema.ListNestedAttribute{Optional: true, MarkdownDescription: "Which metadata properties to show as columns in the chart's data table.", NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{"enabled": schema.BoolAttribute{Required: true, MarkdownDescription: "Whether this property's column is shown."}, "property": schema.StringAttribute{Required: true, MarkdownDescription: "The metadata property's key name."}}}},
 		"backfill_slice_count":         schema.Int64Attribute{Optional: true, MarkdownDescription: "The number of historical query slices used to backfill an imported Dashify time-series chart."},
+		"borderless":                   schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to hide the widget's border and background panel."},
 		"can_toggle_series_visibility": schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether clicking a legend entry toggles that series' visibility."},
 		"color_by":                     schema.StringAttribute{Optional: true, MarkdownDescription: "Whether series are colored by their dimension values or uniformly by their metric name, when no explicit `series.palette_index` is set. Defaults to `Dimension` when unset.", Validators: []validator.String{stringvalidator.OneOf("Dimension", "Metric")}},
 		"description":                  schema.StringAttribute{Optional: true, MarkdownDescription: "Extended text shown below the title describing the chart's purpose."},
+		"headerless":                   schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to hide the widget header, including its title and description."},
 		"hide_missing_values":          schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to exclude a series entirely when every one of its values in the current window is missing. A series with at least one real value stays visible. Defaults to `false` when unset."},
 		"legend_dimension":             schema.StringAttribute{Optional: true, MarkdownDescription: "Which metadata dimension to display in the legend, such as a specific property name shared by every matched series."},
 		"legend_position":              schema.StringAttribute{Optional: true, MarkdownDescription: "Where to place the legend relative to the chart.", Validators: []validator.String{stringvalidator.OneOf("bottom", "right")}},
@@ -450,9 +454,11 @@ func (p MetricsTimeSeriesModel) validationErrors(prefix string) []ValidationErro
 		validationErrors = append(validationErrors, item.validationErrors(fmt.Sprintf("%s.%d", validationPath(prefix, "additional_properties"), index))...)
 	}
 	validationErrors = append(validationErrors, validateInt64(validationPath(prefix, "backfill_slice_count"), p.BackfillSliceCount, nil, nil)...)
+	validationErrors = append(validationErrors, validateBool(validationPath(prefix, "borderless"), p.Borderless, false)...)
 	validationErrors = append(validationErrors, validateBool(validationPath(prefix, "can_toggle_series_visibility"), p.CanToggleSeriesVisibility, false)...)
 	validationErrors = append(validationErrors, validateString(validationPath(prefix, "color_by"), p.ColorBy, false, 0, []string{"Dimension", "Metric"}...)...)
 	validationErrors = append(validationErrors, validateString(validationPath(prefix, "description"), p.Description, false, 0, []string(nil)...)...)
+	validationErrors = append(validationErrors, validateBool(validationPath(prefix, "headerless"), p.Headerless, false)...)
 	validationErrors = append(validationErrors, validateBool(validationPath(prefix, "hide_missing_values"), p.HideMissingValues, false)...)
 	validationErrors = append(validationErrors, validateString(validationPath(prefix, "legend_dimension"), p.LegendDimension, false, 0, []string(nil)...)...)
 	validationErrors = append(validationErrors, validateString(validationPath(prefix, "legend_position"), p.LegendPosition, false, 0, []string{"bottom", "right"}...)...)
@@ -507,6 +513,9 @@ func (p MetricsTimeSeriesModel) BuildSpec() map[string]any {
 	if !p.BackfillSliceCount.IsNull() && !p.BackfillSliceCount.IsUnknown() {
 		setPath(out, []string{"datasource", "backfillSliceCount"}, p.BackfillSliceCount.ValueInt64())
 	}
+	if !p.Borderless.IsNull() && !p.Borderless.IsUnknown() {
+		setPath(out, []string{"widget", "borderless"}, p.Borderless.ValueBool())
+	}
 	if !p.CanToggleSeriesVisibility.IsNull() && !p.CanToggleSeriesVisibility.IsUnknown() {
 		setPath(out, []string{"chart", "legend", "canToggleSeriesVisibility"}, p.CanToggleSeriesVisibility.ValueBool())
 	}
@@ -515,6 +524,9 @@ func (p MetricsTimeSeriesModel) BuildSpec() map[string]any {
 	}
 	if !p.Description.IsNull() && !p.Description.IsUnknown() {
 		setPath(out, []string{"widget", "description"}, p.Description.ValueString())
+	}
+	if !p.Headerless.IsNull() && !p.Headerless.IsUnknown() {
+		setPath(out, []string{"widget", "headerless"}, p.Headerless.ValueBool())
 	}
 	if !p.HideMissingValues.IsNull() && !p.HideMissingValues.IsUnknown() {
 		setPath(out, []string{"chart", "hideMissingValues"}, p.HideMissingValues.ValueBool())
@@ -619,6 +631,9 @@ func ParseMetricsTimeSeriesSpec(spec map[string]any) (MetricsTimeSeriesModel, er
 	if model.BackfillSliceCount, err = TakeInt64(spec, []string{"datasource", "backfillSliceCount"}, Scalar); err != nil {
 		return model, err
 	}
+	if model.Borderless, err = TakeBool(spec, []string{"widget", "borderless"}, Scalar); err != nil {
+		return model, err
+	}
 	if model.CanToggleSeriesVisibility, err = TakeBool(spec, []string{"chart", "legend", "canToggleSeriesVisibility"}, Scalar); err != nil {
 		return model, err
 	}
@@ -626,6 +641,9 @@ func ParseMetricsTimeSeriesSpec(spec map[string]any) (MetricsTimeSeriesModel, er
 		return model, err
 	}
 	if model.Description, err = TakeString(spec, []string{"widget", "description"}, Scalar); err != nil {
+		return model, err
+	}
+	if model.Headerless, err = TakeBool(spec, []string{"widget", "headerless"}, Scalar); err != nil {
 		return model, err
 	}
 	if model.HideMissingValues, err = TakeBool(spec, []string{"chart", "hideMissingValues"}, Scalar); err != nil {
