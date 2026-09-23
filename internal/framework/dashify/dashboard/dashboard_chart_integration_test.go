@@ -31,7 +31,7 @@ func TestDashifyDashboardImportsAllSixChartsAsTypedBlocks(t *testing.T) {
 	require.Empty(t, diags, diags)
 	require.Len(t, parsed.Container, len(entries))
 	for i, expected := range entries {
-		actual := parsed.Container[i].chartEntries()
+		actual := parsed.Container[i].Entries()
 		require.Len(t, actual, 1, "container %d", i)
 		assert.Equal(t, expected.Name, actual[0].Name)
 		assert.JSONEq(t, testDashboardJSON(t, expected.Content.BuildSpec()), testDashboardJSON(t, actual[0].Content.BuildSpec()))
@@ -94,7 +94,7 @@ func TestDashifyDashboardPreservesUnrepresentableRecognizedChartAsRaw(t *testing
 	assert.Contains(t, diags.Warnings()[0].Detail(), "future.preserved")
 	require.Len(t, parsed.Container, 1)
 	require.NotNil(t, parsed.Container[0].Template)
-	assert.Empty(t, parsed.Container[0].chartEntries())
+	assert.Empty(t, parsed.Container[0].Entries())
 	assert.JSONEq(t, testDashboardJSON(t, content), parsed.Container[0].Template.Content.ValueString())
 }
 
@@ -213,7 +213,7 @@ func TestDashifyDashboardCanonicalParseOnRealDrift(t *testing.T) {
 	losslessSpec := entry.Content.BuildSpec()
 	parsed, diags := parseDashboardTemplate(testDashboardRecord(t, []any{testDashboardChartPanel(losslessSpec)}, nil))
 	require.Empty(t, diags, diags)
-	assert.Len(t, parsed.Container[0].chartEntries(), 1, "a losslessly representable chart becomes a typed block")
+	assert.Len(t, parsed.Container[0].Entries(), 1, "a losslessly representable chart becomes a typed block")
 	assert.Nil(t, parsed.Container[0].Template)
 
 	unrepresentable := entry.Content.BuildSpec()
@@ -221,7 +221,7 @@ func TestDashifyDashboardCanonicalParseOnRealDrift(t *testing.T) {
 	parsed, diags = parseDashboardTemplate(testDashboardRecord(t, []any{testDashboardChartPanel(unrepresentable)}, nil))
 	require.False(t, diags.HasError(), diags)
 	require.NotNil(t, parsed.Container[0].Template, "a chart the typed schema cannot hold stays raw")
-	assert.Empty(t, parsed.Container[0].chartEntries())
+	assert.Empty(t, parsed.Container[0].Entries())
 	require.Len(t, diags.Warnings(), 1)
 	assert.Contains(t, diags.Warnings()[0].Detail(), "future.notCurated")
 }
@@ -460,7 +460,7 @@ func TestDashifyDashboardAllSixChartsAtEveryLegalPanelLevel(t *testing.T) {
 				return []any{testDashboardChartPanel(content)}
 			},
 			entries: func(model observabilityDashboardModel) []charts.Entry {
-				return model.Container[0].chartEntries()
+				return model.Container[0].Entries()
 			},
 			panelChild: func(children []any) any { return children[0] },
 		},
@@ -471,7 +471,7 @@ func TestDashifyDashboardAllSixChartsAtEveryLegalPanelLevel(t *testing.T) {
 				}}
 			},
 			entries: func(model observabilityDashboardModel) []charts.Entry {
-				return model.Container[0].Section.Container[0].chartEntries()
+				return model.Container[0].Section.Container[0].Entries()
 			},
 			panelChild: func(children []any) any {
 				return children[0].(map[string]any)[dashifySectionElement].([]any)[0]
@@ -484,7 +484,7 @@ func TestDashifyDashboardAllSixChartsAtEveryLegalPanelLevel(t *testing.T) {
 				}}
 			},
 			entries: func(model observabilityDashboardModel) []charts.Entry {
-				return model.Container[0].Group.Container[0].chartEntries()
+				return model.Container[0].Group.Container[0].Entries()
 			},
 			panelChild: func(children []any) any {
 				return children[0].(map[string]any)[dashifyGroupElement].([]any)[0]

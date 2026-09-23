@@ -72,6 +72,46 @@ func TestContentBlocksAreTheSixNestedBlocksWithConditionalRootRequirements(t *te
 	}
 }
 
+func TestGeneratedFieldsRoundTripAndRejectInvalidEntries(t *testing.T) {
+	entries := []Entry{
+		{Name: MetricsClusterMapName, Content: &MetricsClusterMapModel{}},
+		{Name: MetricsListName, Content: &MetricsListModel{}},
+		{Name: MetricsSingleValueName, Content: &MetricsSingleValueModel{}},
+		{Name: MetricsTableName, Content: &MetricsTableModel{}},
+		{Name: MetricsTimeSeriesName, Content: &MetricsTimeSeriesModel{}},
+		{Name: TextName, Content: &TextModel{}},
+	}
+	var fields Fields
+	if err := fields.SetEntries(entries); err != nil {
+		t.Fatal(err)
+	}
+	actual := fields.Entries()
+	if len(actual) != len(entries) {
+		t.Fatalf("entries = %d, want %d", len(actual), len(entries))
+	}
+	for i := range entries {
+		if actual[i].Name != entries[i].Name || reflect.TypeOf(actual[i].Content) != reflect.TypeOf(entries[i].Content) {
+			t.Errorf("entry %d = {%q, %T}, want {%q, %T}", i, actual[i].Name, actual[i].Content, entries[i].Name, entries[i].Content)
+		}
+	}
+
+	for name, invalid := range map[string][]Entry{
+		"duplicate": {
+			{Name: TextName, Content: &TextModel{}},
+			{Name: TextName, Content: &TextModel{}},
+		},
+		"wrong concrete type": {{Name: TextName, Content: &MetricsListModel{}}},
+		"unsupported name":    {{Name: "future_chart", Content: &TextModel{}}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var fields Fields
+			if err := fields.SetEntries(invalid); err == nil {
+				t.Fatal("invalid entries were accepted")
+			}
+		})
+	}
+}
+
 func TestParseContentRoundTripsAllSix(t *testing.T) {
 	tests := []struct {
 		tag  string

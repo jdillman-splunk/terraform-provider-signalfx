@@ -18,6 +18,108 @@ const MetricsTableName = "metrics_table"
 const MetricsTimeSeriesName = "metrics_time_series"
 const TextName = "text"
 
+type Fields struct {
+	MetricsClusterMap  *MetricsClusterMapModel  `tfsdk:"metrics_cluster_map"`
+	MetricsList        *MetricsListModel        `tfsdk:"metrics_list"`
+	MetricsSingleValue *MetricsSingleValueModel `tfsdk:"metrics_single_value"`
+	MetricsTable       *MetricsTableModel       `tfsdk:"metrics_table"`
+	MetricsTimeSeries  *MetricsTimeSeriesModel  `tfsdk:"metrics_time_series"`
+	Text               *TextModel               `tfsdk:"text"`
+}
+
+func (f Fields) Entries() []Entry {
+	var entries []Entry
+	if f.MetricsClusterMap != nil {
+		entries = append(entries, Entry{Name: MetricsClusterMapName, Content: f.MetricsClusterMap})
+	}
+	if f.MetricsList != nil {
+		entries = append(entries, Entry{Name: MetricsListName, Content: f.MetricsList})
+	}
+	if f.MetricsSingleValue != nil {
+		entries = append(entries, Entry{Name: MetricsSingleValueName, Content: f.MetricsSingleValue})
+	}
+	if f.MetricsTable != nil {
+		entries = append(entries, Entry{Name: MetricsTableName, Content: f.MetricsTable})
+	}
+	if f.MetricsTimeSeries != nil {
+		entries = append(entries, Entry{Name: MetricsTimeSeriesName, Content: f.MetricsTimeSeries})
+	}
+	if f.Text != nil {
+		entries = append(entries, Entry{Name: TextName, Content: f.Text})
+	}
+	return entries
+}
+
+func (f *Fields) SetEntries(entries []Entry) error {
+	f.MetricsClusterMap = nil
+	f.MetricsList = nil
+	f.MetricsSingleValue = nil
+	f.MetricsTable = nil
+	f.MetricsTimeSeries = nil
+	f.Text = nil
+	for _, entry := range entries {
+		switch entry.Name {
+		case MetricsClusterMapName:
+			model, ok := entry.Content.(*MetricsClusterMapModel)
+			if !ok {
+				return fmt.Errorf("chart entry %q has %T content, want *charts.MetricsClusterMapModel", entry.Name, entry.Content)
+			}
+			if f.MetricsClusterMap != nil {
+				return fmt.Errorf("duplicate chart entry %q", entry.Name)
+			}
+			f.MetricsClusterMap = model
+		case MetricsListName:
+			model, ok := entry.Content.(*MetricsListModel)
+			if !ok {
+				return fmt.Errorf("chart entry %q has %T content, want *charts.MetricsListModel", entry.Name, entry.Content)
+			}
+			if f.MetricsList != nil {
+				return fmt.Errorf("duplicate chart entry %q", entry.Name)
+			}
+			f.MetricsList = model
+		case MetricsSingleValueName:
+			model, ok := entry.Content.(*MetricsSingleValueModel)
+			if !ok {
+				return fmt.Errorf("chart entry %q has %T content, want *charts.MetricsSingleValueModel", entry.Name, entry.Content)
+			}
+			if f.MetricsSingleValue != nil {
+				return fmt.Errorf("duplicate chart entry %q", entry.Name)
+			}
+			f.MetricsSingleValue = model
+		case MetricsTableName:
+			model, ok := entry.Content.(*MetricsTableModel)
+			if !ok {
+				return fmt.Errorf("chart entry %q has %T content, want *charts.MetricsTableModel", entry.Name, entry.Content)
+			}
+			if f.MetricsTable != nil {
+				return fmt.Errorf("duplicate chart entry %q", entry.Name)
+			}
+			f.MetricsTable = model
+		case MetricsTimeSeriesName:
+			model, ok := entry.Content.(*MetricsTimeSeriesModel)
+			if !ok {
+				return fmt.Errorf("chart entry %q has %T content, want *charts.MetricsTimeSeriesModel", entry.Name, entry.Content)
+			}
+			if f.MetricsTimeSeries != nil {
+				return fmt.Errorf("duplicate chart entry %q", entry.Name)
+			}
+			f.MetricsTimeSeries = model
+		case TextName:
+			model, ok := entry.Content.(*TextModel)
+			if !ok {
+				return fmt.Errorf("chart entry %q has %T content, want *charts.TextModel", entry.Name, entry.Content)
+			}
+			if f.Text != nil {
+				return fmt.Errorf("duplicate chart entry %q", entry.Name)
+			}
+			f.Text = model
+		default:
+			return fmt.Errorf("unsupported chart entry %q", entry.Name)
+		}
+	}
+	return nil
+}
+
 func ContentBlocks() map[string]schema.Block {
 	return map[string]schema.Block{
 		MetricsClusterMapName:  schema.SingleNestedBlock{MarkdownDescription: "Terraform-facing schema for Dashify's o11y:ClusterMap chart - a grid of colored cells, one per source, confirmed to be the real migration target for classic `signalfx_heatmap_chart` (NOT Dashify's own newer, unrelated `o11y:Heatmap` element, a time-bucketed histogram with ~0 classic usage; see convertHeatmap.ts in app-modern-dashboards, which converts a classic Heatmap chart's colorBy/colorScale/colorRange/groupBy straight into `<o11y:ClusterMap>`). Scoped to what the 171 existing signalfx_heatmap_chart resources in terraform-monitoring actually set, cross-checked against ClusterMapConfigPanel.tsx (the real Dashify editor for this chart type).", Attributes: MetricsClusterMapSchemaAttributes()},

@@ -2215,6 +2215,7 @@ func generateContentAggregate(charts []chartInfo, packageName string) (string, e
 		fmt.Fprintf(&b, "const %sName = %q\n", exportedName(chart.Type), chart.Type)
 	}
 	b.WriteString("\n")
+	writeContentFields(&b, charts)
 
 	b.WriteString("func ContentBlocks() map[string]schema.Block {\n\treturn map[string]schema.Block{\n")
 	for _, chart := range charts {
@@ -2276,11 +2277,11 @@ func generateParentBridge(charts []chartInfo, packageName, chartsImport string) 
 	b.WriteString("// Copyright Splunk, Inc.\n// SPDX-License-Identifier: MPL-2.0\n\n")
 	fmt.Fprintf(&b, "// %s from %s/*.yml; DO NOT EDIT.\n\n", generatedCodeMarker, chartSchemasPath)
 	fmt.Fprintf(&b, "package %s\n\n", packageName)
-	b.WriteString("import (\n\t\"fmt\"\n\n\t\"")
+	b.WriteString("import \"")
 	b.WriteString(chartsImport)
-	b.WriteString("\"\n)\n\n")
+	b.WriteString("\"\n\n")
 
-	writeChartFields(&b, charts)
+	b.WriteString("type dashifyChartFields = charts.Fields\n\n")
 	writeParentContainer(&b, "dashifyDashboardContainerModel", true, true)
 	writeParentContainer(&b, "dashifySectionContainerModel", false, true)
 	writeParentContainer(&b, "dashifyGroupContainerModel", false, false)
@@ -2292,30 +2293,30 @@ func generateParentBridge(charts []chartInfo, packageName, chartsImport string) 
 	return string(formatted), nil
 }
 
-// writeChartFields emits the chart block fields shared by every container
-// level, embedded by value so the plugin framework promotes their tfsdk tags.
-func writeChartFields(b *strings.Builder, charts []chartInfo) {
-	b.WriteString("type dashifyChartFields struct {\n")
+// writeContentFields emits the chart block fields shared by every Terraform
+// surface that embeds typed chart content.
+func writeContentFields(b *strings.Builder, charts []chartInfo) {
+	b.WriteString("type Fields struct {\n")
 	for _, chart := range charts {
-		fmt.Fprintf(b, "\t%s *charts.%s `tfsdk:%q`\n", exportedName(chart.Type), chart.ModelType, chart.Type)
+		fmt.Fprintf(b, "\t%s *%s `tfsdk:%q`\n", exportedName(chart.Type), chart.ModelType, chart.Type)
 	}
 	b.WriteString("}\n\n")
 
-	b.WriteString("func (f dashifyChartFields) chartEntries() []charts.Entry {\n\tvar entries []charts.Entry\n")
+	b.WriteString("func (f Fields) Entries() []Entry {\n\tvar entries []Entry\n")
 	for _, chart := range charts {
 		field := exportedName(chart.Type)
-		fmt.Fprintf(b, "\tif f.%s != nil { entries = append(entries, charts.Entry{Name: charts.%sName, Content: f.%s}) }\n", field, field, field)
+		fmt.Fprintf(b, "\tif f.%s != nil { entries = append(entries, Entry{Name: %sName, Content: f.%s}) }\n", field, field, field)
 	}
 	b.WriteString("\treturn entries\n}\n\n")
 
-	b.WriteString("func (f *dashifyChartFields) setChartEntries(entries []charts.Entry) error {\n")
+	b.WriteString("func (f *Fields) SetEntries(entries []Entry) error {\n")
 	for _, chart := range charts {
 		fmt.Fprintf(b, "\tf.%s = nil\n", exportedName(chart.Type))
 	}
 	b.WriteString("\tfor _, entry := range entries {\n\t\tswitch entry.Name {\n")
 	for _, chart := range charts {
 		field := exportedName(chart.Type)
-		fmt.Fprintf(b, "\t\tcase charts.%sName:\n\t\t\tmodel, ok := entry.Content.(*charts.%s)\n\t\t\tif !ok { return fmt.Errorf(\"chart entry %%q has %%T content, want *charts.%s\", entry.Name, entry.Content) }\n\t\t\tif f.%s != nil { return fmt.Errorf(\"duplicate chart entry %%q\", entry.Name) }\n\t\t\tf.%s = model\n", field, chart.ModelType, chart.ModelType, field, field)
+		fmt.Fprintf(b, "\t\tcase %sName:\n\t\t\tmodel, ok := entry.Content.(*%s)\n\t\t\tif !ok { return fmt.Errorf(\"chart entry %%q has %%T content, want *charts.%s\", entry.Name, entry.Content) }\n\t\t\tif f.%s != nil { return fmt.Errorf(\"duplicate chart entry %%q\", entry.Name) }\n\t\t\tf.%s = model\n", field, chart.ModelType, chart.ModelType, field, field)
 	}
 	b.WriteString("\t\tdefault:\n\t\t\treturn fmt.Errorf(\"unsupported chart entry %q\", entry.Name)\n\t\t}\n\t}\n\treturn nil\n}\n\n")
 }

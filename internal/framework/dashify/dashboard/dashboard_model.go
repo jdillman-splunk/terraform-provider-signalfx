@@ -157,7 +157,7 @@ const (
 func dashifyContainersFromDashboardModels(models []dashifyDashboardContainerModel) []dashifyContainer {
 	containers := make([]dashifyContainer, len(models))
 	for i, model := range models {
-		container := dashifyContainer{Layout: model.Layout, Template: model.Template, Charts: model.chartEntries()}
+		container := dashifyContainer{Layout: model.Layout, Template: model.Template, Charts: model.Entries()}
 		if model.Section != nil {
 			container.Section = &dashifySection{
 				Title:       model.Section.Title,
@@ -178,7 +178,7 @@ func dashifyContainersFromDashboardModels(models []dashifyDashboardContainerMode
 func dashifyContainersFromSectionModels(models []dashifySectionContainerModel) []dashifyContainer {
 	containers := make([]dashifyContainer, len(models))
 	for i, model := range models {
-		container := dashifyContainer{Layout: model.Layout, Template: model.Template, Charts: model.chartEntries()}
+		container := dashifyContainer{Layout: model.Layout, Template: model.Template, Charts: model.Entries()}
 		if model.Group != nil {
 			container.Group = dashifyGroupFromModel(model.Group)
 		}
@@ -199,7 +199,7 @@ func dashifyGroupFromModel(model *dashifyGroupModel) *dashifyGroup {
 func dashifyContainersFromGroupModels(models []dashifyGroupContainerModel) []dashifyContainer {
 	containers := make([]dashifyContainer, len(models))
 	for i, model := range models {
-		containers[i] = dashifyContainer{Layout: model.Layout, Template: model.Template, Charts: model.chartEntries()}
+		containers[i] = dashifyContainer{Layout: model.Layout, Template: model.Template, Charts: model.Entries()}
 	}
 	return containers
 }
@@ -208,7 +208,7 @@ func dashifyDashboardModelsFromContainers(containers []dashifyContainer) ([]dash
 	models := make([]dashifyDashboardContainerModel, len(containers))
 	for i, container := range containers {
 		model := dashifyDashboardContainerModel{Layout: container.Layout, Template: container.Template}
-		if err := model.setChartEntries(container.Charts); err != nil {
+		if err := model.SetEntries(container.Charts); err != nil {
 			return nil, fmt.Errorf("dashboard container %d charts: %w", i, err)
 		}
 		if container.Section != nil {
@@ -240,7 +240,7 @@ func dashifySectionModelsFromContainers(containers []dashifyContainer) ([]dashif
 	models := make([]dashifySectionContainerModel, len(containers))
 	for i, container := range containers {
 		model := dashifySectionContainerModel{Layout: container.Layout, Template: container.Template}
-		if err := model.setChartEntries(container.Charts); err != nil {
+		if err := model.SetEntries(container.Charts); err != nil {
 			return nil, fmt.Errorf("section container %d charts: %w", i, err)
 		}
 		if container.Group != nil {
@@ -272,7 +272,7 @@ func dashifyGroupModelsFromContainers(containers []dashifyContainer) ([]dashifyG
 	models := make([]dashifyGroupContainerModel, len(containers))
 	for i, container := range containers {
 		model := dashifyGroupContainerModel{Layout: container.Layout, Template: container.Template}
-		if err := model.setChartEntries(container.Charts); err != nil {
+		if err := model.SetEntries(container.Charts); err != nil {
 			return nil, fmt.Errorf("group container %d charts: %w", i, err)
 		}
 		models[i] = model

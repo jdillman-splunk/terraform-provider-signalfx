@@ -290,6 +290,7 @@ func (op *ollyProvider) Resources(ctx context.Context) []func() resource.Resourc
 		fwdashify.NewResourceDashifyTemplate,
 		fwdetector.NewAutoDetectorResource,
 		fwintegration.NewResourceBigPanda,
+		fwdashify.NewResourceObservabilityChart,
 		fwdashify.NewResourceObservabilityDashboard,
 		fwdashify.NewResourceObservabilityDirectory,
 		fwdashify.NewResourceObservabilityTemplate,
