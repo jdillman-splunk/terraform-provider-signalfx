@@ -99,7 +99,7 @@ func TestParseObservabilityChartSpecRejectsUnsupportedShapes(t *testing.T) {
 		{"non-object child", `{"<Chart>":[false]}`, "not a chart object"},
 		{"multiple tags", `{"<Chart>":[{"<o11y:TimeSeriesChart>":[],"<o11y:Text>":[]}]}`, "multiple element keys"},
 		{"unsupported tag", `{"<Chart>":[{"<o11y:Future>":[]}]}`, "unsupported element"},
-		{"nonempty marker", `{"<Chart>":[{"<o11y:TimeSeriesChart>":[true],"datasource":{"program":"A"}}]}`, "empty argument list"},
+		{"nonempty marker", `{"<Chart>":[{"<o11y:TimeSeriesChart>":[true],"datasource":{"program":"A"},"chart":{},"widget":{}}]}`, "empty argument list"},
 		{"missing chart group", `{"<Chart>":[{"<o11y:TimeSeriesChart>":[],"datasource":{"program":"A"},"widget":{}}]}`, "chart must be an object"},
 		{"missing widget group", `{"<Chart>":[{"<o11y:TimeSeriesChart>":[],"datasource":{"program":"A"},"chart":{}}]}`, "widget must be an object"},
 		{"null group", `{"<Chart>":[{"<o11y:TimeSeriesChart>":[],"datasource":{"program":"A"},"chart":null,"widget":{}}]}`, "chart must be an object"},
@@ -178,12 +178,10 @@ func TestObservabilityChartValidatesResolvedAndUnknownValues(t *testing.T) {
 	attributes["program"] = types.StringUnknown()
 	attributes["visualization"] = types.StringValue("pie")
 	model.Content = types.ObjectValueMust(model.Content.AttributeTypes(t.Context()), attributes)
-	require.True(t, managed.engine.Validate(t.Context(), model.Name, model.Content, false).HasError(), "known invalid leaf must fail despite an unrelated unknown")
+	require.True(t, managed.engine.Validate(t.Context(), model.Name, model.Content).HasError(), "known invalid leaf must fail despite an unrelated unknown")
 	attributes["visualization"] = types.StringValue("line")
 	model.Content = types.ObjectValueMust(model.Content.AttributeTypes(t.Context()), attributes)
-	require.False(t, managed.engine.Validate(t.Context(), model.Name, model.Content, false).HasError())
-	_, diags := managed.write(t.Context(), model)
-	require.True(t, diags.HasError(), "an unresolved program must never be written")
+	require.False(t, managed.engine.Validate(t.Context(), model.Name, model.Content).HasError())
 	// A different chart's prior object must not influence duration decoding.
 	prior := observabilityChartModel{Name: "text", Content: types.ObjectValueMust(map[string]attr.Type{"time_range": types.StringType}, map[string]attr.Value{"time_range": types.StringValue("60m")})}
 	root := template.RootElementChart

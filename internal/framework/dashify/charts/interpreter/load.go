@@ -17,13 +17,11 @@ import (
 	"github.com/splunk-terraform/terraform-provider-signalfx/internal/framework/dashify/charts/definitions"
 )
 
-func New() (*Engine, error) { return Load(definitions.Files) }
-
-var defaultEngine = sync.OnceValues(New)
-
 // Default resolves the embedded chart definitions once for the provider.
 // Invalid definitions return an error rather than panicking during startup.
-func Default() (*Engine, error) { return defaultEngine() }
+var Default = sync.OnceValues(func() (*Engine, error) {
+	return Load(definitions.Files)
+})
 
 // Load resolves chart definitions from a definitions filesystem.
 // Files at its root are charts; common files are loaded only through references.

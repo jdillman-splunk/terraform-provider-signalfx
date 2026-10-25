@@ -57,11 +57,8 @@ func newEngine(definitions []Definition) (*Engine, error) {
 		if definition.Type == "id" || definition.Type == "title" {
 			return nil, fmt.Errorf("chart name %q is reserved by the resource", definition.Type)
 		}
-		if len(definition.Extends) != 0 {
-			return nil, fmt.Errorf("%s: extends must be resolved before constructing the engine", definition.Type)
-		}
-		if definition.Type == "" || definition.Version != 1 || definition.Element == "" {
-			return nil, fmt.Errorf("chart %q needs version 1 and an element name", definition.Type)
+		if definition.Type == "" || definition.Element == "" {
+			return nil, fmt.Errorf("chart %q needs a type and an element name", definition.Type)
 		}
 		if _, exists := e.definitions[definition.Type]; exists {
 			return nil, fmt.Errorf("duplicate chart %q", definition.Type)
@@ -90,13 +87,13 @@ func (e *Engine) Charts() []Chart {
 	return result
 }
 
+// Attributes returns the cached chart schema. Callers must not modify it.
 func (e *Engine) Attributes(name string) (map[string]schema.Attribute, error) {
-	definition, exists := e.definitions[name]
+	attributes, exists := e.attributes[name]
 	if !exists {
 		return nil, fmt.Errorf("unknown chart %q", name)
 	}
-	// Build independent nested maps; schema attributes retain no Property metadata.
-	return buildAttributes(definition.Properties)
+	return attributes, nil
 }
 
 func buildAttributes(properties map[string]Property) (map[string]schema.Attribute, error) {
@@ -222,22 +219,18 @@ func childProperties(p Property) (map[string]Property, error) {
 	}
 }
 
-func (e *Engine) Validate(ctx context.Context, name string, value types.Object, requireKnown bool) diag.Diagnostics {
+func (e *Engine) Validate(_ context.Context, name string, value types.Object) diag.Diagnostics {
 	var diagnostics diag.Diagnostics
 	d, exists := e.definitions[name]
 	if !exists {
 		diagnostics.AddError("Invalid chart", fmt.Sprintf("Unknown chart %q.", name))
 		return diagnostics
 	}
-	if !value.Type(ctx).Equal(types.ObjectType{AttrTypes: AttributeTypes(e.attributes[name])}) {
-		diagnostics.AddError("Invalid chart value", "The Terraform object type does not match the chart definition.")
-		return diagnostics
-	}
-	validateValue(name, Property{Type: "block", Required: true, Properties: d.Properties}, value, requireKnown, &diagnostics)
+	validateValue(name, Property{Type: "block", Required: true, Properties: d.Properties}, value, &diagnostics)
 	return diagnostics
 }
 
-func validateValue(path string, p Property, value attr.Value, requireKnown bool, diagnostics *diag.Diagnostics) {
+func validateValue(path string, p Property, value attr.Value, diagnostics *diag.Diagnostics) {
 	fail := func(message string) { diagnostics.AddError("Invalid chart value", path+": "+message) }
 	if value == nil || value.IsNull() {
 		if p.Required {
@@ -246,9 +239,6 @@ func validateValue(path string, p Property, value attr.Value, requireKnown bool,
 		return
 	}
 	if value.IsUnknown() {
-		if requireKnown {
-			fail("must be known before writing")
-		}
 		return
 	}
 	switch v := value.(type) {
@@ -260,7 +250,7 @@ func validateValue(path string, p Property, value attr.Value, requireKnown bool,
 			fail(fmt.Sprintf("must be one of %v", p.Values))
 		}
 		if p.Mapping.Transform == "relative_duration" {
-			if _, valid := RelativeDurationSpec(v.ValueString()); !valid {
+			if _, valid := relativeDurationSpec(v.ValueString()); !valid {
 				fail("must be a positive whole-number duration such as 15m or 1h")
 			}
 		}
@@ -280,7 +270,7 @@ func validateValue(path string, p Property, value attr.Value, requireKnown bool,
 		attributes := v.Attributes()
 		for _, name := range keys(children) {
 			child := children[name]
-			validateValue(join(path, name), child, attributes[name], requireKnown, diagnostics)
+			validateValue(join(path, name), child, attributes[name], diagnostics)
 			if present(attributes[name]) {
 				for _, other := range child.ConflictsWith {
 					if present(attributes[other]) {
@@ -336,7 +326,7 @@ func validateValue(path string, p Property, value attr.Value, requireKnown bool,
 			}
 		}
 		for index, child := range v.Elements() {
-			validateValue(fmt.Sprintf("%s.%d", path, index), item, child, requireKnown, diagnostics)
+			validateValue(fmt.Sprintf("%s.%d", path, index), item, child, diagnostics)
 		}
 	case types.Map:
 		item := Property{Type: "block", Required: true}
@@ -344,7 +334,7 @@ func validateValue(path string, p Property, value attr.Value, requireKnown bool,
 			item.Properties = p.Item.Properties
 		}
 		for _, key := range keys(v.Elements()) {
-			validateValue(join(path, key), item, v.Elements()[key], requireKnown, diagnostics)
+			validateValue(join(path, key), item, v.Elements()[key], diagnostics)
 		}
 	}
 }
@@ -381,5 +371,6 @@ func nonempty(v attr.Value) bool {
 	return true
 }
 func matches(v attr.Value, expected string) bool {
-	return present(v) && fmt.Sprint(v) == fmt.Sprintf("%q", expected)
+	value, ok := v.(types.String)
+	return ok && present(value) && value.ValueString() == expected
 }

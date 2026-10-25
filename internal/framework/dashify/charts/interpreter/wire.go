@@ -1,7 +1,7 @@
 // Copyright Splunk, Inc.
 // SPDX-License-Identifier: MPL-2.0
 
-// Numeric, duration, and consuming parsers preserve exact Terraform values and
+// Numeric, duration, and consuming parsers decode Terraform values and
 // leave unmodeled fields available for precise import warnings.
 package interpreter
 
@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"math/big"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,28 +16,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
-
-// Wire JSON uses json.Number; Encode produces int64 and float64 values.
-func exactNumber(raw any) (*big.Rat, bool) {
-	var text string
-	switch value := raw.(type) {
-	case json.Number:
-		text = value.String()
-		if !json.Valid([]byte(text)) {
-			return nil, false
-		}
-	case int64:
-		text = strconv.FormatInt(value, 10)
-	case float64:
-		if math.IsNaN(value) || math.IsInf(value, 0) {
-			return nil, false
-		}
-		text = strconv.FormatFloat(value, 'g', -1, 64)
-	default:
-		return nil, false
-	}
-	return new(big.Rat).SetString(text)
-}
 
 // takeLeaf removes and returns the value at path. Null decodes as an unset
 // Terraform value. A missing intermediate object is optional; an existing
@@ -69,16 +46,13 @@ func takeLeaf(root map[string]any, path []string) (any, bool, error) {
 		if len(parents[index]) != 0 {
 			break
 		}
-		if index == 1 && (path[0] == "chart" || path[0] == "datasource" || path[0] == "widget") {
-			break
-		}
 		delete(parents[index-1], path[index-1])
 	}
 
 	return value, value != nil, nil
 }
 
-// take is TakeString/TakeBool/TakeInt64's shared engine: remove the value at
+// take is takeString/takeBool/takeInt64's shared engine: remove the value at
 // path, then hand the raw wire value to convert for the type-specific part.
 // null is the value each wrapper returns for "absent" or "wrong type".
 // A generic function cannot call types.StringNull() without knowing T.
@@ -90,7 +64,7 @@ func take[T any](root map[string]any, path []string, null T, convert func(raw an
 	return convert(raw)
 }
 
-func TakeString(root map[string]any, path []string) (types.String, error) {
+func takeString(root map[string]any, path []string) (types.String, error) {
 	return take(root, path, types.StringNull(), func(raw any) (types.String, error) {
 		value, ok := raw.(string)
 		if !ok {
@@ -100,7 +74,7 @@ func TakeString(root map[string]any, path []string) (types.String, error) {
 	})
 }
 
-func TakeBool(root map[string]any, path []string) (types.Bool, error) {
+func takeBool(root map[string]any, path []string) (types.Bool, error) {
 	return take(root, path, types.BoolNull(), func(raw any) (types.Bool, error) {
 		value, ok := raw.(bool)
 		if !ok {
@@ -110,9 +84,8 @@ func TakeBool(root map[string]any, path []string) (types.Bool, error) {
 	})
 }
 
-// TakeInt64 accepts wire JSON and values produced by Encode, rejecting
-// fractional numbers and overflow rather than changing their values.
-func TakeInt64(root map[string]any, path []string) (types.Int64, error) {
+// takeInt64 decodes a JSON integer, rejecting fractional numbers and overflow.
+func takeInt64(root map[string]any, path []string) (types.Int64, error) {
 	return take(root, path, types.Int64Null(), func(raw any) (types.Int64, error) {
 		value, err := jsonInt64(raw)
 		if err != nil {
@@ -122,12 +95,8 @@ func TakeInt64(root map[string]any, path []string) (types.Int64, error) {
 	})
 }
 
-// TakeFloat64 accepts both wire and in-process numbers, the same as
-// TakeInt64, but keeps any fractional part instead of rejecting it -
-// schema's `float` type maps to Float64 here, for fields (a
-// threshold bound, a palette range) that are genuinely fractional in real
-// documents.
-func TakeFloat64(root map[string]any, path []string) (types.Float64, error) {
+// takeFloat64 decodes a JSON number into a Terraform Float64 value.
+func takeFloat64(root map[string]any, path []string) (types.Float64, error) {
 	return take(root, path, types.Float64Null(), func(raw any) (types.Float64, error) {
 		value, err := jsonFloat64(raw)
 		if err != nil {
@@ -137,7 +106,7 @@ func TakeFloat64(root map[string]any, path []string) (types.Float64, error) {
 	})
 }
 
-func TakeStringList(root map[string]any, path []string) ([]attr.Value, error) {
+func takeStringList(root map[string]any, path []string) ([]attr.Value, error) {
 	raw, ok, err := takeLeaf(root, path)
 	if err != nil || !ok {
 		return nil, err
@@ -157,7 +126,7 @@ func TakeStringList(root map[string]any, path []string) ([]attr.Value, error) {
 	return out, nil
 }
 
-func TakeObjectList(root map[string]any, path []string, parse func(map[string]any) (attr.Value, error)) ([]attr.Value, error) {
+func takeObjectList(root map[string]any, path []string, parse func(map[string]any) (attr.Value, error)) ([]attr.Value, error) {
 	raw, ok, err := takeLeaf(root, path)
 	if err != nil || !ok {
 		return nil, err
@@ -196,7 +165,7 @@ func TakeObjectList(root map[string]any, path []string, parse func(map[string]an
 // unmodeled fields. It cannot be confused with a stored empty JSON object.
 type consumedListItem struct{}
 
-func TakeObjectMap(root map[string]any, path []string, parse func(map[string]any) (attr.Value, error)) (map[string]attr.Value, error) {
+func takeObjectMap(root map[string]any, path []string, parse func(map[string]any) (attr.Value, error)) (map[string]attr.Value, error) {
 	raw, ok, err := takeLeaf(root, path)
 	if err != nil || !ok {
 		return nil, err
@@ -227,7 +196,7 @@ func TakeObjectMap(root map[string]any, path []string, parse func(map[string]any
 	return out, nil
 }
 
-func TakeObject(root map[string]any, path []string, parse func(map[string]any) (types.Object, error)) (*types.Object, error) {
+func takeObject(root map[string]any, path []string, parse func(map[string]any) (types.Object, error)) (*types.Object, error) {
 	raw, ok, err := takeLeaf(root, path)
 	if err != nil || !ok {
 		return nil, err
@@ -246,14 +215,14 @@ func TakeObject(root map[string]any, path []string, parse func(map[string]any) (
 	return &parsed, nil
 }
 
-// TakeOneOf removes the value at path and hands its raw wire shape - a bare
+// takeOneOf removes the value at path and hands its raw wire shape - a bare
 // scalar or an object, whichever the active variant serialized - to parse,
-// which recovers the variant itself. Unlike TakeObject, a missing path is simply
+// which recovers the variant itself. Unlike takeObject, a missing path is simply
 // absent rather than a type error, since either shape is valid; when the
 // raw value is an object, parse is expected to remove every key it
 // recognizes so the Leftovers check below reports only what no variant
 // claimed.
-func TakeOneOf(root map[string]any, path []string, parse func(raw any) (types.Object, error)) (*types.Object, error) {
+func takeOneOf(root map[string]any, path []string, parse func(raw any) (types.Object, error)) (*types.Object, error) {
 	raw, ok, err := takeLeaf(root, path)
 	if err != nil || !ok {
 		return nil, err
@@ -271,7 +240,7 @@ func TakeOneOf(root map[string]any, path []string, parse func(raw any) (types.Ob
 	return &parsed, nil
 }
 
-func RelativeDurationSpec(value string) (map[string]any, bool) {
+func relativeDurationSpec(value string) (map[string]any, bool) {
 	milliseconds, ok := relativeDurationMillis(value)
 	if !ok {
 		return nil, false
@@ -314,7 +283,7 @@ func relativeDurationMillis(value string) (int64, bool) {
 	return number * multiplier, true
 }
 
-func TakeRelativeDuration(root map[string]any, path []string) (types.String, error) {
+func takeRelativeDuration(root map[string]any, path []string) (types.String, error) {
 	raw, ok, err := takeLeaf(root, path)
 	if err != nil || !ok {
 		return types.StringNull(), err
@@ -357,40 +326,19 @@ func TakeRelativeDuration(root map[string]any, path []string) (types.String, err
 }
 
 func jsonInt64(raw any) (int64, error) {
-	number, valid := exactNumber(raw)
-	if !valid {
+	number, ok := raw.(json.Number)
+	if !ok {
 		return 0, fmt.Errorf("%v (%T) is not a number", raw, raw)
 	}
-	if !number.IsInt() {
-		return 0, fmt.Errorf("%v is not a whole number", raw)
-	}
-	integer := number.Num()
-	if !integer.IsInt64() {
-		return 0, fmt.Errorf("%v is outside the int64 range", raw)
-	}
-	return integer.Int64(), nil
+	return number.Int64()
 }
 
 func jsonFloat64(raw any) (float64, error) {
-	if value, ok := raw.(float64); ok {
-		if math.IsNaN(value) || math.IsInf(value, 0) {
-			return 0, fmt.Errorf("%v is not a finite number", raw)
-		}
-		return value, nil
-	}
-	number, valid := exactNumber(raw)
-	if !valid {
+	number, ok := raw.(json.Number)
+	if !ok {
 		return 0, fmt.Errorf("%v (%T) is not a number", raw, raw)
 	}
-	value, err := strconv.ParseFloat(number.FloatString(400), 64)
-	if err != nil || math.IsNaN(value) || math.IsInf(value, 0) {
-		return 0, fmt.Errorf("%v cannot be represented as a finite float64", raw)
-	}
-	roundTrip, roundTripValid := exactNumber(value)
-	if !roundTripValid || roundTrip.Cmp(number) != 0 {
-		return 0, fmt.Errorf("%v cannot round-trip through float64 without changing value", raw)
-	}
-	return value, nil
+	return number.Float64()
 }
 
 func typeError(path []string, want string, got any) error {

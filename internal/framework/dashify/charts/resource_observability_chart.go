@@ -74,7 +74,7 @@ func (r *observabilityChartResource) ValidateConfig(ctx context.Context, req res
 	resp.Diagnostics.Append(diags...)
 	fwdashify.ValidateObservabilityTitle(resp, path.Root("title"), model.Title)
 	if !resp.Diagnostics.HasError() {
-		resp.Diagnostics.Append(r.engine.Validate(ctx, model.Name, model.Content, false)...)
+		resp.Diagnostics.Append(r.engine.Validate(ctx, model.Name, model.Content)...)
 	}
 }
 

@@ -5,7 +5,9 @@ package interpreter
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"testing/fstest"
@@ -73,56 +75,53 @@ properties:
 	if d.HasError() {
 		t.Fatal(d)
 	}
-	if diagnostics := engine.Validate(context.Background(), "tiny", value, true); diagnostics.HasError() {
+	if diagnostics := engine.Validate(context.Background(), "tiny", value); diagnostics.HasError() {
 		t.Fatal(diagnostics)
 	}
 }
 
 func TestLoaderRejectsUnsafeOrIgnoredSchema(t *testing.T) {
-	for name, text := range map[string]string{
-		"future version":    "type: test\nversion: 2\nelement: T\n",
-		"unknown key":       "type: test\nversion: 1\nelement: T\nignored: true\n",
-		"trailing document": "type: test\nversion: 1\nelement: T\n---\nversion: 1\n",
-		"duplicate":         "type: test\ntype: other\n",
-		"cycle":             "extends: [test.yml]\n",
-		"traversal":         "extends: [../outside.yml]\n",
-		"ref cycle":         "type: test\nversion: 1\nelement: T\nproperties:\n  program: {ref: 'test.yml#program'}\n",
+	for name, test := range map[string]struct{ text, want string }{
+		"future version":    {"type: test\nversion: 2\nelement: T\n", "schema version must be 1"},
+		"unknown key":       {"type: test\nversion: 1\nelement: T\nignored: true\n", "field ignored not found"},
+		"trailing document": {"type: test\nversion: 1\nelement: T\n---\nversion: 1\n", "must contain exactly one YAML document"},
+		"duplicate":         {"type: test\ntype: other\n", `mapping key "type" already defined`},
+		"cycle":             {"type: test\nversion: 1\nelement: T\nextends: [test.yml]\n", "cyclic extends involving test.yml"},
+		"traversal":         {"type: test\nversion: 1\nelement: T\nextends: [../outside.yml]\n", `invalid schema path "../outside.yml"`},
+		"ref cycle":         {"type: test\nversion: 1\nelement: T\nproperties:\n  program: {ref: 'test.yml#program'}\n", "cyclic ref test.yml#program"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := Load(fstest.MapFS{"test.yml": {Data: []byte(text)}})
+			_, err := Load(fstest.MapFS{"test.yml": {Data: []byte(test.text)}})
 			if err == nil {
 				t.Fatal("invalid schema accepted")
+			}
+			if !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("expected error containing %q, got %v", test.want, err)
 			}
 		})
 	}
 }
 
-func copySpec(value any) any {
-	switch v := value.(type) {
-	case map[string]any:
-		out := map[string]any{}
-		for k, x := range v {
-			out[k] = copySpec(x)
-		}
-		return out
-	case []any:
-		out := make([]any, len(v))
-		for i, x := range v {
-			out[i] = copySpec(x)
-		}
-		return out
-	default:
-		return value
+func jsonSpec(t *testing.T, spec map[string]any) map[string]any {
+	t.Helper()
+	data, err := json.Marshal(spec)
+	if err != nil {
+		t.Fatal(err)
 	}
+	object, err := DecodeObject(string(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return object
 }
 
 func TestTextWithoutDatasourceAndUnmodeledContent(t *testing.T) {
-	engine, err := New()
+	engine, err := Default()
 	if err != nil {
 		t.Fatal(err)
 	}
 	spec := map[string]any{"<o11y:Text>": []any{}, "chart": map[string]any{"markdown": "# Notes"}, "widget": map[string]any{}}
-	value, leftovers, d := engine.Decode(t.Context(), "text", spec, types.ObjectNull(nil))
+	value, leftovers, d := engine.Decode(t.Context(), "text", jsonSpec(t, spec), types.ObjectNull(nil))
 	if d.HasError() || len(leftovers) != 0 {
 		t.Fatalf("text import without datasource failed: %v %v", leftovers, d)
 	}
@@ -132,20 +131,20 @@ func TestTextWithoutDatasourceAndUnmodeledContent(t *testing.T) {
 	}
 	for _, group := range []string{"chart", "widget"} {
 		for _, malformed := range []any{nil, "invalid", []any{}} {
-			invalid := copySpec(spec).(map[string]any)
+			invalid := jsonSpec(t, spec)
 			invalid[group] = malformed
 			if _, _, d := engine.Decode(t.Context(), "text", invalid, value); !d.HasError() {
 				t.Fatalf("malformed %s accepted: %#v", group, malformed)
 			}
 		}
-		missing := copySpec(spec).(map[string]any)
+		missing := jsonSpec(t, spec)
 		delete(missing, group)
 		if _, _, d := engine.Decode(t.Context(), "text", missing, value); !d.HasError() {
 			t.Fatalf("missing required container %s accepted", group)
 		}
 	}
 	for _, extra := range []map[string]any{{}, {"program": "unmodeled"}} {
-		withExtra := copySpec(spec).(map[string]any)
+		withExtra := jsonSpec(t, spec)
 		withExtra["datasource"] = extra
 		_, leftovers, d := engine.Decode(t.Context(), "text", withExtra, value)
 		want := "datasource"
@@ -158,7 +157,7 @@ func TestTextWithoutDatasourceAndUnmodeledContent(t *testing.T) {
 	}
 }
 
-func TestDefaultEngineIsSharedAndSafeForIndependentSchemaViews(t *testing.T) {
+func TestDefaultEngineIsShared(t *testing.T) {
 	engine, err := Default()
 	if err != nil {
 		t.Fatal(err)
@@ -172,18 +171,13 @@ func TestDefaultEngineIsSharedAndSafeForIndependentSchemaViews(t *testing.T) {
 				return
 			}
 			attributes, attributesError := shared.Attributes("text")
-			if attributesError != nil {
-				t.Error(attributesError)
+			if attributesError != nil || attributes["markdown"] == nil {
+				t.Errorf("cached engine has no text schema: %v", attributesError)
 				return
 			}
-			delete(attributes, "markdown")
 		})
 	}
 	workers.Wait()
-	attributes, err := engine.Attributes("text")
-	if err != nil || attributes["markdown"] == nil {
-		t.Fatalf("schema view changed cached engine: %v", err)
-	}
 }
 
 func timeSeriesSpec(chart, widget map[string]any) map[string]any {
@@ -224,7 +218,7 @@ func TestTimeSeriesLegacyFieldsRemainUnmodeled(t *testing.T) {
 			"A": map[string]any{"maximumSignificantDigits": int64(4), "displayUnit": "Byte", "precision": int64(3), "valueUnit": "Second"},
 		},
 	}, map[string]any{})
-	value, leftovers, diagnostics := engine.Decode(t.Context(), "metrics_time_series", spec, types.ObjectNull(nil))
+	value, leftovers, diagnostics := engine.Decode(t.Context(), "metrics_time_series", jsonSpec(t, spec), types.ObjectNull(nil))
 	if diagnostics.HasError() || !reflect.DeepEqual(leftovers, []string{"chart.chartOptions.axisPrecision", "chart.seriesOptions.A.precision", "chart.seriesOptions.A.valueUnit"}) {
 		t.Fatal(leftovers, diagnostics)
 	}
@@ -259,7 +253,7 @@ func TestTimeSeriesRejectsMalformedParentsAndUnsupportedDurations(t *testing.T) 
 	} {
 		spec := timeSeriesSpec(map[string]any{}, map[string]any{})
 		spec["datasource"].(map[string]any)["time"] = duration
-		if _, _, diagnostics := engine.Decode(t.Context(), "metrics_time_series", spec, types.ObjectNull(nil)); !diagnostics.HasError() {
+		if _, _, diagnostics := engine.Decode(t.Context(), "metrics_time_series", jsonSpec(t, spec), types.ObjectNull(nil)); !diagnostics.HasError() {
 			t.Errorf("unsupported duration accepted: %#v", duration)
 		}
 	}
@@ -288,11 +282,10 @@ func TestTimeSeriesReportsNestedLeftoversAtOriginalPaths(t *testing.T) {
 		"unknownArray":  []any{map[string]any{}, nil, []any{}, map[string]any{"nested": []any{}}},
 	}, map[string]any{"links": []any{map[string]any{"url": "/service", "futureLink": nil}}})
 	spec["datasource"].(map[string]any)["time"] = map[string]any{"type": "relative", "range": int64(3600000), "rangeEnd": int64(0), "futureTime": []any{}}
-	original := copySpec(spec)
-	value, leftovers, diagnostics := engine.Decode(t.Context(), "metrics_time_series", spec, types.ObjectNull(nil))
+	value, leftovers, diagnostics := engine.Decode(t.Context(), "metrics_time_series", jsonSpec(t, spec), types.ObjectNull(nil))
 	want := []string{"chart.seriesOptions.A.displayUnit.futureUnit", "chart.unknownArray.0", "chart.unknownArray.1", "chart.unknownArray.2", "chart.unknownArray.3.nested", "chart.yAxes.1.width", "datasource.time.futureTime", "widget.links.0.futureLink"}
-	if diagnostics.HasError() || !reflect.DeepEqual(leftovers, want) || !reflect.DeepEqual(spec, original) {
-		t.Fatal("nested ownership paths changed or input was mutated", leftovers, diagnostics)
+	if diagnostics.HasError() || !reflect.DeepEqual(leftovers, want) {
+		t.Fatal("nested ownership paths changed", leftovers, diagnostics)
 	}
 	rebuilt, diagnostics := engine.Encode(t.Context(), "metrics_time_series", value)
 	wantSpec := timeSeriesSpec(map[string]any{

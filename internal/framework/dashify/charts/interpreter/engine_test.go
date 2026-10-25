@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
@@ -58,18 +57,15 @@ func TestValidationDefersUnknownAndEnforcesConditionalCollections(t *testing.T) 
 	scale.RequiresValue = &Condition{Field: "mode", Value: "Scale"}
 	e := testEngine(t, map[string]Property{"mode": mode, "scale": scale})
 	unknown := testValue(t, e, map[string]attr.Value{"mode": types.StringValue("Scale"), "scale": types.ListUnknown(types.StringType)})
-	if d := e.Validate(context.Background(), "test", unknown, false); d.HasError() {
+	if d := e.Validate(context.Background(), "test", unknown); d.HasError() {
 		t.Fatal("unknown rejected during plan", d)
 	}
-	if d := e.Validate(context.Background(), "test", unknown, true); !d.HasError() {
-		t.Fatal("unknown accepted during apply")
-	}
 	empty := testValue(t, e, map[string]attr.Value{"mode": types.StringValue("Scale"), "scale": types.ListValueMust(types.StringType, []attr.Value{})})
-	if d := e.Validate(context.Background(), "test", empty, false); !d.HasError() {
+	if d := e.Validate(context.Background(), "test", empty); !d.HasError() {
 		t.Fatal("conditional empty collection accepted")
 	}
 	wrong := testValue(t, e, map[string]attr.Value{"mode": types.StringValue("None"), "scale": types.ListValueMust(types.StringType, []attr.Value{types.StringValue("red")})})
-	if d := e.Validate(context.Background(), "test", wrong, false); !d.HasError() {
+	if d := e.Validate(context.Background(), "test", wrong); !d.HasError() {
 		t.Fatal("required sibling value ignored")
 	}
 }
@@ -86,7 +82,7 @@ func TestUnicodeLengthAndFiniteFloats(t *testing.T) {
 		}
 	}
 	value := testValue(t, e, map[string]attr.Value{"title": types.StringValue("你")})
-	if d := e.Validate(context.Background(), "test", value, false); !d.HasError() {
+	if d := e.Validate(context.Background(), "test", value); !d.HasError() {
 		t.Fatal("UTF-8 bytes counted as characters")
 	}
 }
@@ -106,7 +102,7 @@ func TestNestedCollectionsRoundTrip(t *testing.T) {
 	if d.HasError() {
 		t.Fatal(d)
 	}
-	decoded, leftovers, d := e.Decode(context.Background(), "test", spec, types.ObjectNull(nil))
+	decoded, leftovers, d := e.Decode(context.Background(), "test", jsonSpec(t, spec), types.ObjectNull(nil))
 	if d.HasError() || len(leftovers) > 0 || !decoded.Equal(configured) {
 		t.Fatalf("nested collections changed: %v %v", leftovers, d)
 	}
@@ -115,14 +111,14 @@ func TestNestedCollectionsRoundTrip(t *testing.T) {
 	if d.HasError() {
 		t.Fatal(d)
 	}
-	decoded, leftovers, d = e.Decode(context.Background(), "test", spec, empty)
+	decoded, leftovers, d = e.Decode(context.Background(), "test", jsonSpec(t, spec), empty)
 	if d.HasError() || len(leftovers) > 0 || !decoded.Equal(empty) {
 		t.Fatal("empty collections lost", leftovers, d)
 	}
 }
 
 func TestTableGroupingDecodesCurrentArrays(t *testing.T) {
-	e, err := New()
+	e, err := Default()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +161,7 @@ func TestTableGroupingDecodesCurrentArrays(t *testing.T) {
 		"datasource":        map[string]any{"program": "A"},
 		"chart":             map[string]any{"groupBy": []any{"host", "region"}},
 	}
-	value, _, diagnostics := e.Decode(t.Context(), "metrics_table", tooMany, types.ObjectNull(nil))
+	value, _, diagnostics := e.Decode(t.Context(), "metrics_table", jsonSpec(t, tooMany), types.ObjectNull(nil))
 	if diagnostics.HasError() || len(diagnostics) != 0 {
 		t.Fatal("stored grouping outside the configured limit should decode without diagnostics", diagnostics)
 	}
@@ -178,25 +174,27 @@ func TestTableGroupingDecodesCurrentArrays(t *testing.T) {
 	}
 }
 
-func TestDecodeRejectsUnsafeNumericsAndElementArgs(t *testing.T) {
+func TestDecodeNumbersAndElementArgs(t *testing.T) {
 	e := testEngine(t, map[string]Property{"count": testProperty("number", "chart", "count"), "fraction": testProperty("float", "chart", "fraction")})
 	for _, number := range []struct {
-		wire json.Number
-		want int64
-	}{{"9007199254740993", 9007199254740993}, {"1.0", 1}, {"1e0", 1}, {"-0", 0}} {
-		spec := map[string]any{"<o11y:Test>": []any{}, "chart": map[string]any{"count": number.wire, "fraction": json.Number("0.125")}}
+		integer      json.Number
+		wantInteger  int64
+		fraction     json.Number
+		wantFraction float64
+	}{{"9007199254740993", 9007199254740993, "0.125", 0.125}, {"-0", 0, "0.1000000000000000001", 0.1}} {
+		spec := map[string]any{"<o11y:Test>": []any{}, "chart": map[string]any{"count": number.integer, "fraction": number.fraction}}
 		value, leftovers, diagnostics := e.Decode(t.Context(), "test", spec, types.ObjectNull(nil))
-		if diagnostics.HasError() || len(leftovers) != 0 || value.Attributes()["count"].(types.Int64).ValueInt64() != number.want || value.Attributes()["fraction"].(types.Float64).ValueFloat64() != 0.125 {
-			t.Fatal("exact numeric value changed", value, leftovers, diagnostics)
+		if diagnostics.HasError() || len(leftovers) != 0 || value.Attributes()["count"].(types.Int64).ValueInt64() != number.wantInteger || value.Attributes()["fraction"].(types.Float64).ValueFloat64() != number.wantFraction {
+			t.Fatal("unexpected numeric value", value, leftovers, diagnostics)
 		}
 	}
 	for _, fieldValue := range []struct {
 		field string
 		value any
-	}{{"count", json.Number("1.1")}, {"count", json.Number("9223372036854775808")}, {"fraction", json.Number("0.1000000000000000001")}, {"fraction", math.NaN()}} {
+	}{{"count", json.Number("1.1")}, {"count", json.Number("1.0")}, {"count", json.Number("1e3")}, {"count", json.Number("9223372036854775808")}, {"fraction", json.Number("1e1000")}} {
 		spec := map[string]any{"<o11y:Test>": []any{}, "chart": map[string]any{fieldValue.field: fieldValue.value}, "widget": map[string]any{}, "datasource": map[string]any{}}
 		if _, _, d := e.Decode(context.Background(), "test", spec, types.ObjectNull(nil)); !d.HasError() {
-			t.Fatalf("unsafe number accepted: %v", fieldValue.value)
+			t.Fatalf("invalid numeric value accepted: %v", fieldValue.value)
 		}
 	}
 	spec := map[string]any{"<o11y:Test>": []any{"argument"}, "chart": map[string]any{}, "widget": map[string]any{}, "datasource": map[string]any{}}
@@ -338,7 +336,7 @@ func TestOneOfDecodeSelectsWireShapeAndPreservesUnmodeledFields(t *testing.T) {
 				t.Fatal("inactive variant claimed fields", fields)
 			}
 			if test.warning {
-				if len(diagnostics) != 0 || !e.Validate(t.Context(), "test", value, true).HasError() {
+				if len(diagnostics) != 0 || !e.Validate(t.Context(), "test", value).HasError() {
 					t.Fatal("stored union should decode cleanly while configuration stays invalid", diagnostics)
 				}
 				return
@@ -348,41 +346,5 @@ func TestOneOfDecodeSelectsWireShapeAndPreservesUnmodeledFields(t *testing.T) {
 				t.Fatal("incorrect union reconstruction", rebuilt, diagnostics)
 			}
 		})
-	}
-}
-
-func TestEngineReturnsIndependentSchemaViews(t *testing.T) {
-	minimum := 1
-	name := testProperty("string", "name")
-	name.MinLength = &minimum
-	style := testProperty("enum", "style")
-	style.Values = []string{"line", "area"}
-	options := testProperty("block", "chart", "options")
-	options.Properties = map[string]Property{"name": name, "style": style}
-	properties := map[string]Property{"options": options}
-	e := testEngine(t, properties)
-	attributes, _ := e.Attributes("test")
-	objectType := attributes["options"].GetType().(types.ObjectType)
-	value := testValue(t, e, map[string]attr.Value{"options": types.ObjectValueMust(objectType.AttrTypes, map[string]attr.Value{"name": types.StringValue("x"), "style": types.StringValue("line")})})
-
-	// Changes to a returned schema must not affect the shared engine.
-	view := attributes["options"].(schema.SingleNestedAttribute)
-	delete(view.Attributes, "style")
-	delete(attributes, "options")
-
-	if d := e.Validate(t.Context(), "test", value, true); d.HasError() {
-		t.Fatal("caller changed the engine's validation contract", d)
-	}
-	spec, d := e.Encode(t.Context(), "test", value)
-	if d.HasError() || spec["chart"] == nil || spec["other"] != nil {
-		t.Fatal("caller changed the engine's wire mappings", spec, d)
-	}
-	fresh, _ := e.Attributes("test")
-	if len(fresh["options"].(schema.SingleNestedAttribute).Attributes) != 2 {
-		t.Fatal("caller changed the engine's schema")
-	}
-	wrong := types.ObjectValueMust(map[string]attr.Type{"name": types.StringType}, map[string]attr.Value{"name": types.StringValue("x")})
-	if d := e.Validate(t.Context(), "test", wrong, false); !d.HasError() {
-		t.Fatal("mismatched Terraform object type accepted")
 	}
 }

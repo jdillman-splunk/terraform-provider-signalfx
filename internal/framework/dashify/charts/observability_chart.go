@@ -13,7 +13,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
-	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/signalfx/signalfx-go/template"
@@ -60,13 +59,8 @@ func (r *observabilityChartResource) model(ctx context.Context, input observabil
 }
 
 func (r *observabilityChartResource) write(ctx context.Context, model observabilityChartModel) (*template.CreateUpdateTemplateRequest, diag.Diagnostics) {
-	var resp resource.ValidateConfigResponse
-	fwdashify.ValidateObservabilityTitle(&resp, path.Root("title"), model.Title)
 	if model.Title.IsUnknown() {
-		resp.Diagnostics.AddError("Unknown chart title", "title must be known before writing a Chart Template.")
-	}
-	if resp.Diagnostics.HasError() {
-		return nil, resp.Diagnostics
+		return nil, diag.Diagnostics{diag.NewErrorDiagnostic("Unknown chart title", "title must be known before writing a Chart Template.")}
 	}
 	content, diags := r.engine.Encode(ctx, model.Name, model.Content)
 	if diags.HasError() {
@@ -131,7 +125,7 @@ func (r *observabilityChartResource) modelFromRecord(ctx context.Context, record
 // Read reports server values outside the configuration rules as one warning.
 // Write responses skip this because state comes from the validated plan.
 func (r *observabilityChartResource) ruleWarning(ctx context.Context, model observabilityChartModel) diag.Diagnostics {
-	violations := r.engine.Validate(ctx, model.Name, model.Content, true)
+	violations := r.engine.Validate(ctx, model.Name, model.Content)
 	if len(violations) == 0 {
 		return nil
 	}
@@ -176,9 +170,6 @@ func (r *observabilityChartResource) parseSpec(raw []byte) (string, map[string]a
 	}
 	if name == "" {
 		return "", nil, nil, fmt.Errorf("chart contains unsupported element %q; use signalfx_observability_template for other chart types", tag)
-	}
-	if args, valid := content[tag].([]any); !valid || len(args) != 0 {
-		return "", nil, nil, fmt.Errorf("%s must have an empty argument list", tag)
 	}
 	delete(spec, observabilityChartElement)
 	return name, content, interpreter.Leftovers("spec", spec), nil
