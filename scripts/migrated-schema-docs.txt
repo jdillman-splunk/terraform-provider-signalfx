@@ -1,3 +1,2 @@
 # Add one entry when its SDK registration is migrated to Framework.
 # Format: resource|data-source <documentation short name>
-resource observability_chart

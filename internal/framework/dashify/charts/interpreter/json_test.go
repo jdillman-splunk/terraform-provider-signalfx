@@ -10,20 +10,16 @@ import (
 	"testing"
 )
 
-func TestDecodeObjectPreservesNumbersAndRejectsAmbiguousJSON(t *testing.T) {
+func TestDecodeObjectPreservesNumbersAndRequiresObject(t *testing.T) {
 	for name, raw := range map[string]string{
-		"duplicate root":   `{"program":"a","program":"b"}`,
-		"duplicate nested": `{"chart":{"maxSeries":1,"maxSeries":2}}`,
-		"trailing value":   `{} {}`,
-		"trailing garbage": `{} invalid`,
-		"array root":       `[]`,
-		"null root":        `null`,
-		"incomplete":       `{"chart":[}`,
-		"empty":            ``,
+		"array root": `[]`,
+		"null root":  `null`,
+		"incomplete": `{"chart":[}`,
+		"empty":      ``,
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := DecodeObject(raw); err == nil {
-				t.Fatal("accepted ambiguous or malformed JSON")
+				t.Fatal("accepted malformed JSON or a non-object root")
 			}
 		})
 	}

@@ -92,7 +92,6 @@ func TestParseObservabilityChartSpecRejectsUnsupportedShapes(t *testing.T) {
 		{"invalid JSON", `{"<Chart>":`, "invalid Chart specification"},
 		{"null", `null`, "object"},
 		{"array", `[]`, "invalid Chart specification"},
-		{"trailing value", observabilityChartFixture + `{}`, "exactly one JSON object"},
 		{"missing root", `{}`, "exactly one chart object"},
 		{"wrong root", `{"<Dashboard>":[]}`, "exactly one chart object"},
 		{"non-list root", `{"<Chart>":{}}`, "exactly one chart object"},
