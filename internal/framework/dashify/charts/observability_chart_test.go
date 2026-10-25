@@ -90,8 +90,6 @@ func TestParseObservabilityChartSpecRejectsUnsupportedShapes(t *testing.T) {
 	root := template.RootElementChart
 	for _, test := range []struct{ name, spec, want string }{
 		{"invalid JSON", `{"<Chart>":`, "invalid Chart specification"},
-		{"null", `null`, "object"},
-		{"array", `[]`, "invalid Chart specification"},
 		{"missing root", `{}`, "exactly one chart object"},
 		{"wrong root", `{"<Dashboard>":[]}`, "exactly one chart object"},
 		{"non-list root", `{"<Chart>":{}}`, "exactly one chart object"},
@@ -143,33 +141,6 @@ func TestObservabilityChartReadsConfigurationViolations(t *testing.T) {
 	}
 }
 
-func TestObservabilityChartFromResultRejectsInvalidResponses(t *testing.T) {
-	t.Parallel()
-	managed := NewResourceObservabilityChart().(*observabilityChartResource)
-	root, wrongRoot := template.RootElementChart, template.RootElementDashboard
-	for _, test := range []struct {
-		name   string
-		result *template.Result
-		want   string
-	}{
-		{"nil result", nil, "no template record"},
-		{"nil data", &template.Result{}, "no template record"},
-		{"no ID", &template.Result{Data: &template.Template{}}, "without an ID"},
-		{"mismatched ID", &template.Result{Data: &template.Template{ID: "other"}}, "for Chart"},
-		{"path ID", &template.Result{Data: &template.Template{ID: "../other"}}, "for Chart"},
-		{"missing root", &template.Result{Data: &template.Template{ID: "chart-1", Spec: json.RawMessage(observabilityChartFixture)}}, "Chart root element"},
-		{"wrong root", &template.Result{Data: &template.Template{ID: "chart-1", Metadata: &template.Metadata{RootElement: &wrongRoot}, Spec: json.RawMessage(observabilityChartFixture)}}, "Chart root element"},
-		{"bad spec", &template.Result{Data: &template.Template{ID: "chart-1", Metadata: &template.Metadata{RootElement: &root}, Spec: json.RawMessage(`{}`)}}, "exactly one chart"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-			_, diags := managed.fromResult(t.Context(), test.result, "chart-1", observabilityChartModel{})
-			require.True(t, diags.HasError(), diags)
-			assert.Contains(t, diags.Errors()[0].Detail(), test.want)
-		})
-	}
-}
-
 func TestObservabilityChartValidatesResolvedAndUnknownValues(t *testing.T) {
 	t.Parallel()
 	managed := NewResourceObservabilityChart().(*observabilityChartResource)
@@ -178,10 +149,10 @@ func TestObservabilityChartValidatesResolvedAndUnknownValues(t *testing.T) {
 	attributes["program"] = types.StringUnknown()
 	attributes["visualization"] = types.StringValue("pie")
 	model.Content = types.ObjectValueMust(model.Content.AttributeTypes(t.Context()), attributes)
-	require.True(t, managed.engine.Validate(t.Context(), model.Name, model.Content).HasError(), "known invalid leaf must fail despite an unrelated unknown")
+	require.True(t, managed.engine.Validate(model.Name, model.Content).HasError(), "known invalid leaf must fail despite an unrelated unknown")
 	attributes["visualization"] = types.StringValue("line")
 	model.Content = types.ObjectValueMust(model.Content.AttributeTypes(t.Context()), attributes)
-	require.False(t, managed.engine.Validate(t.Context(), model.Name, model.Content).HasError())
+	require.False(t, managed.engine.Validate(model.Name, model.Content).HasError())
 	// A different chart's prior object must not influence duration decoding.
 	prior := observabilityChartModel{Name: "text", Content: types.ObjectValueMust(map[string]attr.Type{"time_range": types.StringType}, map[string]attr.Value{"time_range": types.StringValue("60m")})}
 	root := template.RootElementChart

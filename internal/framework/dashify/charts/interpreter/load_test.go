@@ -4,7 +4,6 @@
 package interpreter
 
 import (
-	"context"
 	"encoding/json"
 	"reflect"
 	"strings"
@@ -58,7 +57,7 @@ properties:
     mapping: {path: [datasource, program]}
 `)},
 	}
-	engine, err := Load(files)
+	engine, err := load(files)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,13 +68,13 @@ properties:
 	if attributes["program"].IsRequired() {
 		t.Fatal("explicit false did not override inherited true")
 	}
-	objectType := AttributeTypes(attributes)
+	objectType := attributeTypes(attributes)
 	values := map[string]attr.Value{"program": types.StringValue(""), "query": types.ObjectNull(objectType["query"].(types.ObjectType).AttrTypes)}
 	value, d := types.ObjectValue(objectType, values)
 	if d.HasError() {
 		t.Fatal(d)
 	}
-	if diagnostics := engine.Validate(context.Background(), "tiny", value); diagnostics.HasError() {
+	if diagnostics := engine.Validate("tiny", value); diagnostics.HasError() {
 		t.Fatal(diagnostics)
 	}
 }
@@ -91,7 +90,7 @@ func TestLoaderRejectsUnsafeOrIgnoredSchema(t *testing.T) {
 		"ref cycle":         {"type: test\nversion: 1\nelement: T\nproperties:\n  program: {ref: 'test.yml#program'}\n", "cyclic ref test.yml#program"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := Load(fstest.MapFS{"test.yml": {Data: []byte(test.text)}})
+			_, err := load(fstest.MapFS{"test.yml": {Data: []byte(test.text)}})
 			if err == nil {
 				t.Fatal("invalid schema accepted")
 			}

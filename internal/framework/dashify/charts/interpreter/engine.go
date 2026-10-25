@@ -4,7 +4,6 @@
 package interpreter
 
 import (
-	"context"
 	"fmt"
 	"math"
 	"slices"
@@ -24,7 +23,7 @@ type Chart struct {
 	Description string
 }
 
-func AttributeTypes(attributes map[string]schema.Attribute) map[string]attr.Type {
+func attributeTypes(attributes map[string]schema.Attribute) map[string]attr.Type {
 	result := make(map[string]attr.Type, len(attributes))
 	for name, attribute := range attributes {
 		result[name] = attribute.GetType()
@@ -34,7 +33,7 @@ func AttributeTypes(attributes map[string]schema.Attribute) map[string]attr.Type
 
 // Mappings with an intermediate root declare chart container objects. Seeding
 // only those roots keeps Text independent of the metrics datasource container.
-func containerRoots(properties map[string]Property) []string {
+func containerRoots(properties map[string]property) []string {
 	roots := map[string]bool{}
 	for _, property := range properties {
 		if len(property.Mapping.Path) > 1 {
@@ -45,14 +44,14 @@ func containerRoots(properties map[string]Property) []string {
 }
 
 type Engine struct {
-	definitions map[string]Definition
+	definitions map[string]definition
 	attributes  map[string]map[string]schema.Attribute
 	roots       map[string][]string
 }
 
-// newEngine takes ownership of definitions decoded by Load.
-func newEngine(definitions []Definition) (*Engine, error) {
-	e := &Engine{definitions: map[string]Definition{}, attributes: map[string]map[string]schema.Attribute{}, roots: map[string][]string{}}
+// newEngine takes ownership of definitions decoded by load.
+func newEngine(definitions []definition) (*Engine, error) {
+	e := &Engine{definitions: map[string]definition{}, attributes: map[string]map[string]schema.Attribute{}, roots: map[string][]string{}}
 	for _, definition := range definitions {
 		if definition.Type == "id" || definition.Type == "title" {
 			return nil, fmt.Errorf("chart name %q is reserved by the resource", definition.Type)
@@ -96,7 +95,7 @@ func (e *Engine) Attributes(name string) (map[string]schema.Attribute, error) {
 	return attributes, nil
 }
 
-func buildAttributes(properties map[string]Property) (map[string]schema.Attribute, error) {
+func buildAttributes(properties map[string]property) (map[string]schema.Attribute, error) {
 	if err := checkProperties(properties); err != nil {
 		return nil, err
 	}
@@ -167,7 +166,7 @@ func buildAttributes(properties map[string]Property) (map[string]schema.Attribut
 // Oneof variants share one Terraform object: scalar variants become named
 // fields, while block variants contribute their children. Wire shape selects
 // the active variant; mutually exclusive variants cannot be silently combined.
-func childProperties(p Property) (map[string]Property, error) {
+func childProperties(p property) (map[string]property, error) {
 	switch p.Type {
 	case "block":
 		return p.Properties, nil
@@ -180,7 +179,7 @@ func childProperties(p Property) (map[string]Property, error) {
 		}
 		return p.Item.Properties, nil
 	case "oneof":
-		out := map[string]Property{}
+		out := map[string]property{}
 		scalarVariants := 0
 		for variant, definition := range p.Variants {
 			children := definition.Properties
@@ -198,7 +197,7 @@ func childProperties(p Property) (map[string]Property, error) {
 				}
 				definition.Mapping.Path = []string{variant}
 				definition.Required, definition.Optional = false, true
-				children = map[string]Property{variant: definition}
+				children = map[string]property{variant: definition}
 			}
 			for name, child := range children {
 				if definition.Type == "block" && child.Required {
@@ -219,18 +218,18 @@ func childProperties(p Property) (map[string]Property, error) {
 	}
 }
 
-func (e *Engine) Validate(_ context.Context, name string, value types.Object) diag.Diagnostics {
+func (e *Engine) Validate(name string, value types.Object) diag.Diagnostics {
 	var diagnostics diag.Diagnostics
 	d, exists := e.definitions[name]
 	if !exists {
 		diagnostics.AddError("Invalid chart", fmt.Sprintf("Unknown chart %q.", name))
 		return diagnostics
 	}
-	validateValue(name, Property{Type: "block", Required: true, Properties: d.Properties}, value, &diagnostics)
+	validateValue(name, property{Type: "block", Required: true, Properties: d.Properties}, value, &diagnostics)
 	return diagnostics
 }
 
-func validateValue(path string, p Property, value attr.Value, diagnostics *diag.Diagnostics) {
+func validateValue(path string, p property, value attr.Value, diagnostics *diag.Diagnostics) {
 	fail := func(message string) { diagnostics.AddError("Invalid chart value", path+": "+message) }
 	if value == nil || value.IsNull() {
 		if p.Required {
@@ -318,7 +317,7 @@ func validateValue(path string, p Property, value attr.Value, diagnostics *diag.
 		if p.MaxItems != nil && len(v.Elements()) > *p.MaxItems {
 			fail(fmt.Sprintf("must contain at most %d items", *p.MaxItems))
 		}
-		item := Property{Type: "block", Required: true}
+		item := property{Type: "block", Required: true}
 		if p.Item != nil {
 			item.Properties = p.Item.Properties
 			if p.Item.Type == "string" {
@@ -329,7 +328,7 @@ func validateValue(path string, p Property, value attr.Value, diagnostics *diag.
 			validateValue(fmt.Sprintf("%s.%d", path, index), item, child, diagnostics)
 		}
 	case types.Map:
-		item := Property{Type: "block", Required: true}
+		item := property{Type: "block", Required: true}
 		if p.Item != nil {
 			item.Properties = p.Item.Properties
 		}

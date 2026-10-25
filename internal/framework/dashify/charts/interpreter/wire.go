@@ -52,10 +52,8 @@ func takeLeaf(root map[string]any, path []string) (any, bool, error) {
 	return value, value != nil, nil
 }
 
-// take is takeString/takeBool/takeInt64's shared engine: remove the value at
-// path, then hand the raw wire value to convert for the type-specific part.
-// null is the value each wrapper returns for "absent" or "wrong type".
-// A generic function cannot call types.StringNull() without knowing T.
+// take removes the value at path, returning null when absent, and converts
+// present values with the type-specific parser.
 func take[T any](root map[string]any, path []string, null T, convert func(raw any) (T, error)) (T, error) {
 	raw, ok, err := takeLeaf(root, path)
 	if err != nil || !ok {
@@ -196,48 +194,36 @@ func takeObjectMap(root map[string]any, path []string, parse func(map[string]any
 	return out, nil
 }
 
-func takeObject(root map[string]any, path []string, parse func(map[string]any) (types.Object, error)) (*types.Object, error) {
-	raw, ok, err := takeLeaf(root, path)
-	if err != nil || !ok {
-		return nil, err
-	}
-	value, ok := raw.(map[string]any)
-	if !ok {
-		return nil, typeError(path, "an object", raw)
-	}
-	parsed, err := parse(value)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", strings.Join(path, "."), err)
-	}
-	if len(value) != 0 {
-		setPath(root, path, value)
-	}
-	return &parsed, nil
+func takeObject(root map[string]any, path []string, null types.Object, parse func(map[string]any) (types.Object, error)) (types.Object, error) {
+	return take(root, path, null, func(raw any) (types.Object, error) {
+		value, ok := raw.(map[string]any)
+		if !ok {
+			return null, typeError(path, "an object", raw)
+		}
+		parsed, err := parse(value)
+		if err != nil {
+			return null, fmt.Errorf("%s: %w", strings.Join(path, "."), err)
+		}
+		if len(value) != 0 {
+			setPath(root, path, value)
+		}
+		return parsed, nil
+	})
 }
 
-// takeOneOf removes the value at path and hands its raw wire shape - a bare
-// scalar or an object, whichever the active variant serialized - to parse,
-// which recovers the variant itself. Unlike takeObject, a missing path is simply
-// absent rather than a type error, since either shape is valid; when the
-// raw value is an object, parse is expected to remove every key it
-// recognizes so the Leftovers check below reports only what no variant
-// claimed.
-func takeOneOf(root map[string]any, path []string, parse func(raw any) (types.Object, error)) (*types.Object, error) {
-	raw, ok, err := takeLeaf(root, path)
-	if err != nil || !ok {
-		return nil, err
-	}
-
-	parsed, err := parse(raw)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", strings.Join(path, "."), err)
-	}
-
-	if obj, ok := raw.(map[string]any); ok && len(obj) != 0 {
-		setPath(root, path, obj)
-	}
-
-	return &parsed, nil
+// takeOneOf decodes a scalar or object variant, leaving unrecognized object
+// fields available for unsupported-field warnings.
+func takeOneOf(root map[string]any, path []string, null types.Object, parse func(raw any) (types.Object, error)) (types.Object, error) {
+	return take(root, path, null, func(raw any) (types.Object, error) {
+		parsed, err := parse(raw)
+		if err != nil {
+			return null, fmt.Errorf("%s: %w", strings.Join(path, "."), err)
+		}
+		if obj, ok := raw.(map[string]any); ok && len(obj) != 0 {
+			setPath(root, path, obj)
+		}
+		return parsed, nil
+	})
 }
 
 func relativeDurationSpec(value string) (map[string]any, bool) {

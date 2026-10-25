@@ -74,7 +74,7 @@ func (r *observabilityChartResource) ValidateConfig(ctx context.Context, req res
 	resp.Diagnostics.Append(diags...)
 	fwdashify.ValidateObservabilityTitle(resp, path.Root("title"), model.Title)
 	if !resp.Diagnostics.HasError() {
-		resp.Diagnostics.Append(r.engine.Validate(ctx, model.Name, model.Content)...)
+		resp.Diagnostics.Append(r.engine.Validate(model.Name, model.Content)...)
 	}
 }
 
@@ -97,24 +97,13 @@ func (r *observabilityChartResource) Create(ctx context.Context, req resource.Cr
 	if resp.Diagnostics.Append(fwerr.ErrorHandler(ctx, resp.State, err)...); resp.Diagnostics.HasError() || err != nil {
 		return
 	}
-	// The POST has created the chart. Keep a usable ID even if the returned
-	// document fails validation, so Terraform can track and delete the chart.
-	if result != nil && result.Data != nil && fwdashify.ObservabilityTemplateIDValid(result.Data.ID) {
-		model.ID = types.StringValue(result.Data.ID)
-		resp.Diagnostics.Append(r.setState(ctx, &resp.State, model)...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-	}
-	parsed, diags := r.fromResult(ctx, result, "", model)
+	record, diags := observabilityChartRecordFromResult(result, "")
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if parsed.Name != model.Name {
-		resp.Diagnostics.AddError("Invalid Chart API response", fmt.Sprintf("Template API returned chart type %q for configured %q.", parsed.Name, model.Name))
-		return
-	}
+	model.ID = types.StringValue(record.ID)
+	resp.Diagnostics.Append(r.setState(ctx, &resp.State, model)...)
 }
 
 func (r *observabilityChartResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -131,9 +120,14 @@ func (r *observabilityChartResource) Read(ctx context.Context, req resource.Read
 	if resp.Diagnostics.Append(fwerr.ErrorHandler(ctx, resp.State, err)...); resp.Diagnostics.HasError() || err != nil {
 		return
 	}
+	record, diags := observabilityChartRecordFromResult(result, id.ValueString())
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	// Imported state has only an ID; absence of prior chart content is expected.
 	prior, _ := r.model(ctx, req.State)
-	model, diags := r.fromResult(ctx, result, id.ValueString(), prior)
+	model, diags := r.modelFromRecord(ctx, record, prior)
 	resp.Diagnostics.Append(diags...)
 	if !resp.Diagnostics.HasError() {
 		resp.Diagnostics.Append(r.ruleWarning(ctx, model)...)
@@ -161,13 +155,9 @@ func (r *observabilityChartResource) Update(ctx context.Context, req resource.Up
 	if resp.Diagnostics.Append(fwerr.ErrorHandler(ctx, resp.State, err)...); resp.Diagnostics.HasError() || err != nil {
 		return
 	}
-	parsed, diags := r.fromResult(ctx, result, model.ID.ValueString(), model)
+	_, diags = observabilityChartRecordFromResult(result, model.ID.ValueString())
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
-		return
-	}
-	if parsed.Name != model.Name {
-		resp.Diagnostics.AddError("Invalid Chart API response", fmt.Sprintf("Template API returned chart type %q for configured %q.", parsed.Name, model.Name))
 		return
 	}
 	resp.Diagnostics.Append(r.setState(ctx, &resp.State, model)...)

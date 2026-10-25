@@ -11,28 +11,28 @@ import (
 	"strings"
 )
 
-type Definition struct {
+type definition struct {
 	Type        string              `yaml:"type"`
 	Version     int                 `yaml:"version"`
 	Description string              `yaml:"description"`
 	Element     string              `yaml:"element"`
 	Extends     []string            `yaml:"extends"`
-	Properties  map[string]Property `yaml:"properties"`
+	Properties  map[string]property `yaml:"properties"`
 }
 
-type Mapping struct {
+type mapping struct {
 	Path      []string `yaml:"path"`
 	Transform string   `yaml:"transform"`
 }
-type Item struct {
+type item struct {
 	Type       string              `yaml:"type"`
-	Properties map[string]Property `yaml:"properties"`
+	Properties map[string]property `yaml:"properties"`
 }
-type Condition struct {
+type condition struct {
 	Field string `yaml:"field"`
 	Value string `yaml:"value"`
 }
-type Property struct {
+type property struct {
 	Type          string              `yaml:"type"`
 	Description   string              `yaml:"description"`
 	Ref           string              `yaml:"ref"`
@@ -46,17 +46,17 @@ type Property struct {
 	MaxItems      *int                `yaml:"max_items"`
 	ConflictsWith []string            `yaml:"conflicts_with"`
 	AtLeastOneOf  []string            `yaml:"at_least_one_of"`
-	RequiresValue *Condition          `yaml:"requires_value"`
-	RequiredWhen  *Condition          `yaml:"required_when"`
-	Mapping       Mapping             `yaml:"mapping"`
-	Item          *Item               `yaml:"item"`
-	Properties    map[string]Property `yaml:"properties"`
-	Variants      map[string]Property `yaml:"variants"`
+	RequiresValue *condition          `yaml:"requires_value"`
+	RequiredWhen  *condition          `yaml:"required_when"`
+	Mapping       mapping             `yaml:"mapping"`
+	Item          *item               `yaml:"item"`
+	Properties    map[string]property `yaml:"properties"`
+	Variants      map[string]property `yaml:"variants"`
 }
 
 // Reject declarations the interpreter cannot enforce rather than silently
 // accepting a newer dialect or producing ambiguous wire mappings.
-func checkProperties(properties map[string]Property) error {
+func checkProperties(properties map[string]property) error {
 	names := keys(properties)
 	for index, name := range names {
 		p := properties[name]
@@ -102,7 +102,7 @@ func checkProperties(properties map[string]Property) error {
 				return fail("unknown or self conflict: " + peer)
 			}
 		}
-		for _, condition := range []*Condition{p.RequiresValue, p.RequiredWhen} {
+		for _, condition := range []*condition{p.RequiresValue, p.RequiredWhen} {
 			if condition == nil {
 				continue
 			}
@@ -138,7 +138,7 @@ func checkProperties(properties map[string]Property) error {
 
 // Block variants contribute fields to the parent object; they do not retain a
 // separate value on which presence, mappings, or constraints could operate.
-func checkBlockVariant(p Property) error {
+func checkBlockVariant(p property) error {
 	if p.Ref != "" || p.Optional || p.Required || p.Values != nil || p.Default != nil ||
 		p.Min != nil || p.Max != nil || p.MinLength != nil || p.MaxItems != nil ||
 		p.ConflictsWith != nil || p.AtLeastOneOf != nil || p.RequiresValue != nil || p.RequiredWhen != nil ||

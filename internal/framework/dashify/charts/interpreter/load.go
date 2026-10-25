@@ -20,12 +20,12 @@ import (
 // Default resolves the embedded chart definitions once for the provider.
 // Invalid definitions return an error rather than panicking during startup.
 var Default = sync.OnceValues(func() (*Engine, error) {
-	return Load(definitions.Files)
+	return load(definitions.Files)
 })
 
-// Load resolves chart definitions from a definitions filesystem.
+// load resolves chart definitions from a definitions filesystem.
 // Files at its root are charts; common files are loaded only through references.
-func Load(files fs.FS) (*Engine, error) {
+func load(files fs.FS) (*Engine, error) {
 	names, err := fs.Glob(files, "*.yml")
 	if err != nil {
 		return nil, err
@@ -34,7 +34,7 @@ func Load(files fs.FS) (*Engine, error) {
 		return nil, fmt.Errorf("no chart schemas found")
 	}
 	l := loader{files: files, cache: map[string]*yaml.Node{}}
-	definitions := make([]Definition, 0, len(names))
+	definitions := make([]definition, 0, len(names))
 	for _, name := range names {
 		node, err := l.document(name, map[string]bool{})
 		if err != nil {
@@ -44,7 +44,7 @@ func Load(files fs.FS) (*Engine, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", name, err)
 		}
-		var definition Definition
+		var definition definition
 		if err := node.Decode(&definition); err != nil {
 			return nil, fmt.Errorf("%s: %w", name, err)
 		}
@@ -69,7 +69,7 @@ func (l *loader) read(name string) (*yaml.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	var declared Definition
+	var declared definition
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	decoder.KnownFields(true)
 	if err := decoder.Decode(&declared); err != nil {

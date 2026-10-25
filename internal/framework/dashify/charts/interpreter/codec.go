@@ -14,7 +14,7 @@ import (
 )
 
 func (e *Engine) Encode(ctx context.Context, name string, value types.Object) (map[string]any, diag.Diagnostics) {
-	diagnostics := e.Validate(ctx, name, value)
+	diagnostics := e.Validate(name, value)
 	if diagnostics.HasError() {
 		return nil, diagnostics
 	}
@@ -28,7 +28,7 @@ func (e *Engine) Encode(ctx context.Context, name string, value types.Object) (m
 	return spec, diagnostics
 }
 
-func encodeObject(properties map[string]Property, value types.Object) map[string]any {
+func encodeObject(properties map[string]property, value types.Object) map[string]any {
 	result := map[string]any{}
 	for _, name := range keys(properties) {
 		v := value.Attributes()[name]
@@ -48,7 +48,7 @@ func encodeObject(properties map[string]Property, value types.Object) map[string
 	return result
 }
 
-func encodeValue(p Property, value attr.Value) any {
+func encodeValue(p property, value attr.Value) any {
 	switch v := value.(type) {
 	case types.String:
 		return v.ValueString()
@@ -81,13 +81,13 @@ func encodeValue(p Property, value attr.Value) any {
 	case types.List:
 		result := make([]any, len(v.Elements()))
 		for index, child := range v.Elements() {
-			result[index] = encodeValue(Property{Type: "block", Properties: p.Item.Properties}, child)
+			result[index] = encodeValue(property{Type: "block", Properties: p.Item.Properties}, child)
 		}
 		return result
 	case types.Map:
 		result := map[string]any{}
 		for key, child := range v.Elements() {
-			result[key] = encodeValue(Property{Type: "block", Properties: p.Item.Properties}, child)
+			result[key] = encodeValue(property{Type: "block", Properties: p.Item.Properties}, child)
 		}
 		return result
 	default:
@@ -103,7 +103,7 @@ func (e *Engine) Decode(ctx context.Context, name string, spec map[string]any, p
 		diagnostics.AddError("Invalid chart", fmt.Sprintf("Unknown chart %q.", name))
 		return types.ObjectNull(nil), nil, diagnostics
 	}
-	null := types.ObjectNull(AttributeTypes(attributes))
+	null := types.ObjectNull(attributeTypes(attributes))
 	var priorValues map[string]attr.Value
 	if present(prior) {
 		// Only top-level relative durations preserve their configured spelling.
@@ -121,7 +121,7 @@ func (e *Engine) Decode(ctx context.Context, name string, spec map[string]any, p
 		return null, nil, diagnostics
 	}
 	delete(spec, tag)
-	value, err := decodeObject(ctx, e.definitions[name].Properties, AttributeTypes(attributes), spec, priorValues)
+	value, err := decodeObject(ctx, e.definitions[name].Properties, attributeTypes(attributes), spec, priorValues)
 	if err != nil {
 		diagnostics.AddError("Invalid chart document", err.Error())
 		return null, nil, diagnostics
@@ -136,7 +136,7 @@ func (e *Engine) Decode(ctx context.Context, name string, spec map[string]any, p
 	return value, Leftovers("", spec), diagnostics
 }
 
-func decodeObject(ctx context.Context, properties map[string]Property, attributeTypes map[string]attr.Type, spec map[string]any, priorValues map[string]attr.Value) (types.Object, error) {
+func decodeObject(ctx context.Context, properties map[string]property, attributeTypes map[string]attr.Type, spec map[string]any, priorValues map[string]attr.Value) (types.Object, error) {
 	values := map[string]attr.Value{}
 	for _, name := range keys(attributeTypes) {
 		p, exists := properties[name]
@@ -164,7 +164,7 @@ func decodeObject(ctx context.Context, properties map[string]Property, attribute
 	return value, nil
 }
 
-func decodeValue(ctx context.Context, p Property, valueType attr.Type, spec map[string]any, prior attr.Value) (attr.Value, error) {
+func decodeValue(ctx context.Context, p property, valueType attr.Type, spec map[string]any, prior attr.Value) (attr.Value, error) {
 	switch p.Type {
 	case "string", "enum":
 		if p.Mapping.Transform == "relative_duration" {
@@ -191,21 +191,14 @@ func decodeValue(ctx context.Context, p Property, valueType attr.Type, spec map[
 		return takeFloat64(spec, p.Mapping.Path)
 	case "block", "oneof":
 		objectType := valueType.(types.ObjectType)
-		parse := func(raw map[string]any) (types.Object, error) {
+		null := types.ObjectNull(objectType.AttrTypes)
+		if p.Type == "oneof" {
+			return takeOneOf(spec, p.Mapping.Path, null, func(raw any) (types.Object, error) { return decodeOneOf(ctx, p, raw, objectType) })
+		}
+		return takeObject(spec, p.Mapping.Path, null, func(raw map[string]any) (types.Object, error) {
 			children, _ := childProperties(p)
 			return decodeObject(ctx, children, objectType.AttrTypes, raw, nil)
-		}
-		var object *types.Object
-		var err error
-		if p.Type == "oneof" {
-			object, err = takeOneOf(spec, p.Mapping.Path, func(raw any) (types.Object, error) { return decodeOneOf(ctx, p, raw, objectType) })
-		} else {
-			object, err = takeObject(spec, p.Mapping.Path, parse)
-		}
-		if object == nil {
-			return types.ObjectNull(objectType.AttrTypes), err
-		}
-		return *object, err
+		})
 	case "list", "map":
 		if p.Type == "list" && p.Item.Type == "string" {
 			values, err := takeStringList(spec, p.Mapping.Path)
@@ -250,10 +243,10 @@ func decodeValue(ctx context.Context, p Property, valueType attr.Type, spec map[
 	}
 }
 
-func decodeOneOf(ctx context.Context, p Property, raw any, objectType types.ObjectType) (types.Object, error) {
+func decodeOneOf(ctx context.Context, p property, raw any, objectType types.ObjectType) (types.Object, error) {
 	children, _ := childProperties(p)
 	if object, ok := raw.(map[string]any); ok {
-		blockFields := map[string]Property{}
+		blockFields := map[string]property{}
 		for _, variant := range p.Variants {
 			if variant.Type == "block" {
 				for name, child := range variant.Properties {
@@ -271,7 +264,7 @@ func decodeOneOf(ctx context.Context, p Property, raw any, objectType types.Obje
 		}
 		if _, ok := raw.(string); ok && (variant.Type == "string" || variant.Type == "enum") {
 			object := map[string]any{name: raw}
-			return decodeObject(ctx, map[string]Property{name: children[name]}, objectType.AttrTypes, object, nil)
+			return decodeObject(ctx, map[string]property{name: children[name]}, objectType.AttrTypes, object, nil)
 		}
 	}
 	return types.ObjectNull(objectType.AttrTypes), fmt.Errorf("%T is not a supported oneof shape", raw)

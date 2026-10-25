@@ -78,15 +78,15 @@ func (r *observabilityChartResource) write(ctx context.Context, model observabil
 	}, diags
 }
 
-func (r *observabilityChartResource) fromResult(ctx context.Context, result *template.Result, expectedID string, prior observabilityChartModel) (observabilityChartModel, diag.Diagnostics) {
+func observabilityChartRecordFromResult(result *template.Result, expectedID string) (*template.Template, diag.Diagnostics) {
 	record, err := fwdashify.ObservabilityTemplateFromResult(result)
 	if err != nil {
-		return observabilityChartModel{}, diag.Diagnostics{diag.NewErrorDiagnostic("Invalid Chart API response", err.Error())}
+		return nil, diag.Diagnostics{diag.NewErrorDiagnostic("Invalid Chart API response", err.Error())}
 	}
 	if !fwdashify.ObservabilityTemplateIDValid(record.ID) || expectedID != "" && record.ID != expectedID {
-		return observabilityChartModel{}, diag.Diagnostics{diag.NewErrorDiagnostic("Invalid Chart API response", fmt.Sprintf("Template API returned record %q for Chart %q.", record.ID, expectedID))}
+		return nil, diag.Diagnostics{diag.NewErrorDiagnostic("Invalid Chart API response", fmt.Sprintf("Template API returned record %q for Chart %q.", record.ID, expectedID))}
 	}
-	return r.modelFromRecord(ctx, record, prior)
+	return record, nil
 }
 
 func (r *observabilityChartResource) modelFromRecord(ctx context.Context, record *template.Template, prior observabilityChartModel) (observabilityChartModel, diag.Diagnostics) {
@@ -125,7 +125,7 @@ func (r *observabilityChartResource) modelFromRecord(ctx context.Context, record
 // Read reports server values outside the configuration rules as one warning.
 // Write responses skip this because state comes from the validated plan.
 func (r *observabilityChartResource) ruleWarning(ctx context.Context, model observabilityChartModel) diag.Diagnostics {
-	violations := r.engine.Validate(ctx, model.Name, model.Content)
+	violations := r.engine.Validate(model.Name, model.Content)
 	if len(violations) == 0 {
 		return nil
 	}

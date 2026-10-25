@@ -15,12 +15,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
-func testProperty(kind string, path ...string) Property {
-	return Property{Type: kind, Optional: true, Description: "Test field.", Mapping: Mapping{Path: path}}
+func testProperty(kind string, path ...string) property {
+	return property{Type: kind, Optional: true, Description: "Test field.", Mapping: mapping{Path: path}}
 }
-func testEngine(t *testing.T, properties map[string]Property) *Engine {
+func testEngine(t *testing.T, properties map[string]property) *Engine {
 	t.Helper()
-	e, err := newEngine([]Definition{{Type: "test", Version: 1, Element: "o11y:Test", Properties: properties}})
+	e, err := newEngine([]definition{{Type: "test", Version: 1, Element: "o11y:Test", Properties: properties}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,9 +29,9 @@ func testEngine(t *testing.T, properties map[string]Property) *Engine {
 func testValue(t *testing.T, e *Engine, overrides map[string]attr.Value) types.Object {
 	t.Helper()
 	attributes, _ := e.Attributes("test")
-	attributeTypes := AttributeTypes(attributes)
+	attrTypes := attributeTypes(attributes)
 	values := map[string]attr.Value{}
-	for name, typ := range attributeTypes {
+	for name, typ := range attrTypes {
 		value, err := typ.ValueFromTerraform(t.Context(), tftypes.NewValue(typ.TerraformType(t.Context()), nil))
 		if err != nil {
 			t.Fatal(err)
@@ -41,7 +41,7 @@ func testValue(t *testing.T, e *Engine, overrides map[string]attr.Value) types.O
 	for name, value := range overrides {
 		values[name] = value
 	}
-	value, d := types.ObjectValue(attributeTypes, values)
+	value, d := types.ObjectValue(attrTypes, values)
 	if d.HasError() {
 		t.Fatal(d)
 	}
@@ -52,20 +52,20 @@ func TestValidationDefersUnknownAndEnforcesConditionalCollections(t *testing.T) 
 	mode := testProperty("enum", "chart", "mode")
 	mode.Values = []string{"Scale", "None"}
 	scale := testProperty("list", "chart", "scale")
-	scale.Item = &Item{Type: "string"}
-	scale.RequiredWhen = &Condition{Field: "mode", Value: "Scale"}
-	scale.RequiresValue = &Condition{Field: "mode", Value: "Scale"}
-	e := testEngine(t, map[string]Property{"mode": mode, "scale": scale})
+	scale.Item = &item{Type: "string"}
+	scale.RequiredWhen = &condition{Field: "mode", Value: "Scale"}
+	scale.RequiresValue = &condition{Field: "mode", Value: "Scale"}
+	e := testEngine(t, map[string]property{"mode": mode, "scale": scale})
 	unknown := testValue(t, e, map[string]attr.Value{"mode": types.StringValue("Scale"), "scale": types.ListUnknown(types.StringType)})
-	if d := e.Validate(context.Background(), "test", unknown); d.HasError() {
+	if d := e.Validate("test", unknown); d.HasError() {
 		t.Fatal("unknown rejected during plan", d)
 	}
 	empty := testValue(t, e, map[string]attr.Value{"mode": types.StringValue("Scale"), "scale": types.ListValueMust(types.StringType, []attr.Value{})})
-	if d := e.Validate(context.Background(), "test", empty); !d.HasError() {
+	if d := e.Validate("test", empty); !d.HasError() {
 		t.Fatal("conditional empty collection accepted")
 	}
 	wrong := testValue(t, e, map[string]attr.Value{"mode": types.StringValue("None"), "scale": types.ListValueMust(types.StringType, []attr.Value{types.StringValue("red")})})
-	if d := e.Validate(context.Background(), "test", wrong); !d.HasError() {
+	if d := e.Validate("test", wrong); !d.HasError() {
 		t.Fatal("required sibling value ignored")
 	}
 }
@@ -74,7 +74,7 @@ func TestUnicodeLengthAndFiniteFloats(t *testing.T) {
 	minimum := 2
 	title := testProperty("string", "widget", "title")
 	title.MinLength = &minimum
-	e := testEngine(t, map[string]Property{"title": title, "limit": testProperty("float", "chart", "limit")})
+	e := testEngine(t, map[string]property{"title": title, "limit": testProperty("float", "chart", "limit")})
 	for _, limit := range []float64{math.Inf(1), math.Inf(-1)} {
 		value := testValue(t, e, map[string]attr.Value{"title": types.StringValue("你好"), "limit": types.Float64Value(limit)})
 		if _, d := e.Encode(context.Background(), "test", value); !d.HasError() {
@@ -82,7 +82,7 @@ func TestUnicodeLengthAndFiniteFloats(t *testing.T) {
 		}
 	}
 	value := testValue(t, e, map[string]attr.Value{"title": types.StringValue("你")})
-	if d := e.Validate(context.Background(), "test", value); !d.HasError() {
+	if d := e.Validate("test", value); !d.HasError() {
 		t.Fatal("UTF-8 bytes counted as characters")
 	}
 }
@@ -90,10 +90,10 @@ func TestUnicodeLengthAndFiniteFloats(t *testing.T) {
 func TestNestedCollectionsRoundTrip(t *testing.T) {
 	label := testProperty("string", "label")
 	list := testProperty("list", "chart", "windows")
-	list.Item = &Item{Properties: map[string]Property{"label": label}}
+	list.Item = &item{Properties: map[string]property{"label": label}}
 	items := testProperty("map", "chart", "namedWindows")
 	items.Item = list.Item
-	e := testEngine(t, map[string]Property{"windows": list, "named_windows": items})
+	e := testEngine(t, map[string]property{"windows": list, "named_windows": items})
 	attributes, _ := e.Attributes("test")
 	objectType := attributes["windows"].GetType().(types.ListType).ElemType.(types.ObjectType)
 	window := types.ObjectValueMust(objectType.AttrTypes, map[string]attr.Value{"label": types.StringValue("sample")})
@@ -175,7 +175,7 @@ func TestTableGroupingDecodesCurrentArrays(t *testing.T) {
 }
 
 func TestDecodeNumbersAndElementArgs(t *testing.T) {
-	e := testEngine(t, map[string]Property{"count": testProperty("number", "chart", "count"), "fraction": testProperty("float", "chart", "fraction")})
+	e := testEngine(t, map[string]property{"count": testProperty("number", "chart", "count"), "fraction": testProperty("float", "chart", "fraction")})
 	for _, number := range []struct {
 		integer      json.Number
 		wantInteger  int64
@@ -205,31 +205,31 @@ func TestDecodeNumbersAndElementArgs(t *testing.T) {
 
 func TestDefinitionRejectsUnenforceableAndAmbiguousFields(t *testing.T) {
 	for _, name := range []string{"id", "title"} {
-		_, err := newEngine([]Definition{{Type: name, Version: 1, Element: "o11y:Reserved", Properties: map[string]Property{"program": testProperty("string", "datasource", "program")}}})
+		_, err := newEngine([]definition{{Type: name, Version: 1, Element: "o11y:Reserved", Properties: map[string]property{"program": testProperty("string", "datasource", "program")}}})
 		if err == nil {
 			t.Fatalf("chart %s can overwrite a resource attribute", name)
 		}
 	}
 	minimum := 1
-	for name, properties := range map[string]map[string]Property{
+	for name, properties := range map[string]map[string]property{
 		"overlap":        {"a": testProperty("string", "chart", "a"), "b": testProperty("string", "chart", "a", "b")},
-		"ignored bounds": {"a": func() Property { p := testProperty("bool", "chart", "a"); p.Min = &minimum; return p }()},
-		"ignored values": {"a": func() Property { p := testProperty("string", "chart", "a"); p.Values = []string{"allowed"}; return p }()},
-		"empty values on string": {"a": func() Property {
+		"ignored bounds": {"a": func() property { p := testProperty("bool", "chart", "a"); p.Min = &minimum; return p }()},
+		"ignored values": {"a": func() property { p := testProperty("string", "chart", "a"); p.Values = []string{"allowed"}; return p }()},
+		"empty values on string": {"a": func() property {
 			p := testProperty("string", "chart", "a")
 			p.Values = []string{}
 			return p
 		}()},
-		"string map": {"a": func() Property { p := testProperty("map", "chart", "a"); p.Item = &Item{Type: "string"}; return p }()},
-		"unknown condition": {"a": func() Property {
+		"string map": {"a": func() property { p := testProperty("map", "chart", "a"); p.Item = &item{Type: "string"}; return p }()},
+		"unknown condition": {"a": func() property {
 			p := testProperty("string", "chart", "a")
-			p.RequiredWhen = &Condition{Field: "missing", Value: "x"}
+			p.RequiredWhen = &condition{Field: "missing", Value: "x"}
 			return p
 		}()},
-		"missing presence": {"a": {Type: "string", Description: "Test.", Mapping: Mapping{Path: []string{"chart", "a"}}}},
+		"missing presence": {"a": {Type: "string", Description: "Test.", Mapping: mapping{Path: []string{"chart", "a"}}}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := newEngine([]Definition{{Type: "test", Version: 1, Element: "T", Properties: properties}})
+			_, err := newEngine([]definition{{Type: "test", Version: 1, Element: "T", Properties: properties}})
 			if err == nil {
 				t.Fatal("invalid definition accepted")
 			}
@@ -238,15 +238,15 @@ func TestDefinitionRejectsUnenforceableAndAmbiguousFields(t *testing.T) {
 }
 
 func TestOneOfRejectsUnsupportedWireAlternatives(t *testing.T) {
-	for name, variants := range map[string]map[string]Property{
+	for name, variants := range map[string]map[string]property{
 		"bool":                 {"flag": {Type: "bool", Description: "Flag."}},
 		"ambiguous strings":    {"a": {Type: "string", Description: "A."}, "b": {Type: "string", Description: "B."}},
-		"required block child": {"unit": {Type: "enum", Description: "Unit.", Values: []string{"Byte"}}, "custom": {Type: "block", Properties: map[string]Property{"prefix": {Type: "string", Required: true, Description: "Prefix.", Mapping: Mapping{Path: []string{"prefix"}}}}}},
+		"required block child": {"unit": {Type: "enum", Description: "Unit.", Values: []string{"Byte"}}, "custom": {Type: "block", Properties: map[string]property{"prefix": {Type: "string", Required: true, Description: "Prefix.", Mapping: mapping{Path: []string{"prefix"}}}}}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			choice := testProperty("oneof", "chart", "choice")
 			choice.Variants = variants
-			_, err := newEngine([]Definition{{Type: "test", Version: 1, Element: "T", Properties: map[string]Property{"choice": choice}}})
+			_, err := newEngine([]definition{{Type: "test", Version: 1, Element: "T", Properties: map[string]property{"choice": choice}}})
 			if err == nil {
 				t.Fatal("unsupported oneof accepted")
 			}
@@ -256,36 +256,36 @@ func TestOneOfRejectsUnsupportedWireAlternatives(t *testing.T) {
 
 func TestOneOfRejectsIgnoredBlockVariantMetadata(t *testing.T) {
 	bound := 0
-	for name, change := range map[string]func(*Property){
-		"reference":          func(p *Property) { p.Ref = "common/fields.yml#display_unit" },
-		"optional":           func(p *Property) { p.Optional = true },
-		"required":           func(p *Property) { p.Required = true },
-		"values":             func(p *Property) { p.Values = []string{"Byte"} },
-		"empty values":       func(p *Property) { p.Values = []string{} },
-		"default":            func(p *Property) { p.Default = false },
-		"minimum":            func(p *Property) { p.Min = &bound },
-		"maximum":            func(p *Property) { p.Max = &bound },
-		"minimum length":     func(p *Property) { p.MinLength = &bound },
-		"maximum items":      func(p *Property) { p.MaxItems = &bound },
-		"conflicts":          func(p *Property) { p.ConflictsWith = []string{"unit"} },
-		"empty conflicts":    func(p *Property) { p.ConflictsWith = []string{} },
-		"at least one":       func(p *Property) { p.AtLeastOneOf = []string{"prefix"} },
-		"empty at least one": func(p *Property) { p.AtLeastOneOf = []string{} },
-		"requires value":     func(p *Property) { p.RequiresValue = &Condition{Field: "unit", Value: "Byte"} },
-		"required when":      func(p *Property) { p.RequiredWhen = &Condition{Field: "unit", Value: "Byte"} },
-		"mapping path":       func(p *Property) { p.Mapping.Path = []string{"custom"} },
-		"empty mapping path": func(p *Property) { p.Mapping.Path = []string{} },
-		"mapping transform":  func(p *Property) { p.Mapping.Transform = "negate" },
-		"item":               func(p *Property) { p.Item = &Item{} },
-		"variants":           func(p *Property) { p.Variants = map[string]Property{"unit": testProperty("string", "unit")} },
-		"empty variants":     func(p *Property) { p.Variants = map[string]Property{} },
+	for name, change := range map[string]func(*property){
+		"reference":          func(p *property) { p.Ref = "common/fields.yml#display_unit" },
+		"optional":           func(p *property) { p.Optional = true },
+		"required":           func(p *property) { p.Required = true },
+		"values":             func(p *property) { p.Values = []string{"Byte"} },
+		"empty values":       func(p *property) { p.Values = []string{} },
+		"default":            func(p *property) { p.Default = false },
+		"minimum":            func(p *property) { p.Min = &bound },
+		"maximum":            func(p *property) { p.Max = &bound },
+		"minimum length":     func(p *property) { p.MinLength = &bound },
+		"maximum items":      func(p *property) { p.MaxItems = &bound },
+		"conflicts":          func(p *property) { p.ConflictsWith = []string{"unit"} },
+		"empty conflicts":    func(p *property) { p.ConflictsWith = []string{} },
+		"at least one":       func(p *property) { p.AtLeastOneOf = []string{"prefix"} },
+		"empty at least one": func(p *property) { p.AtLeastOneOf = []string{} },
+		"requires value":     func(p *property) { p.RequiresValue = &condition{Field: "unit", Value: "Byte"} },
+		"required when":      func(p *property) { p.RequiredWhen = &condition{Field: "unit", Value: "Byte"} },
+		"mapping path":       func(p *property) { p.Mapping.Path = []string{"custom"} },
+		"empty mapping path": func(p *property) { p.Mapping.Path = []string{} },
+		"mapping transform":  func(p *property) { p.Mapping.Transform = "negate" },
+		"item":               func(p *property) { p.Item = &item{} },
+		"variants":           func(p *property) { p.Variants = map[string]property{"unit": testProperty("string", "unit")} },
+		"empty variants":     func(p *property) { p.Variants = map[string]property{} },
 	} {
 		t.Run(name, func(t *testing.T) {
-			variant := Property{Type: "block", Properties: map[string]Property{"prefix": testProperty("string", "prefix")}}
+			variant := property{Type: "block", Properties: map[string]property{"prefix": testProperty("string", "prefix")}}
 			change(&variant)
 			choice := testProperty("oneof", "chart", "choice")
-			choice.Variants = map[string]Property{"custom": variant}
-			if _, err := newEngine([]Definition{{Type: "test", Version: 1, Element: "o11y:Test", Properties: map[string]Property{"choice": choice}}}); err == nil {
+			choice.Variants = map[string]property{"custom": variant}
+			if _, err := newEngine([]definition{{Type: "test", Version: 1, Element: "o11y:Test", Properties: map[string]property{"choice": choice}}}); err == nil {
 				t.Fatal("ignored block-variant metadata accepted")
 			}
 		})
@@ -295,14 +295,14 @@ func TestOneOfRejectsIgnoredBlockVariantMetadata(t *testing.T) {
 func TestOneOfDecodeSelectsWireShapeAndPreservesUnmodeledFields(t *testing.T) {
 	choice := testProperty("oneof", "chart", "choice")
 	choice.AtLeastOneOf = []string{"unit", "prefix", "suffix"}
-	choice.Variants = map[string]Property{
+	choice.Variants = map[string]property{
 		"unit": {Type: "enum", Description: "Named unit.", Values: []string{"Byte"}},
-		"custom": {Type: "block", Properties: map[string]Property{
+		"custom": {Type: "block", Properties: map[string]property{
 			"prefix": testProperty("string", "prefix"),
 			"suffix": testProperty("string", "suffix"),
 		}},
 	}
-	e := testEngine(t, map[string]Property{"choice": choice})
+	e := testEngine(t, map[string]property{"choice": choice})
 	attributes, _ := e.Attributes("test")
 	objectType := attributes["choice"].GetType().(types.ObjectType)
 	// A prior scalar variant must not leak into a subsequent custom object.
@@ -336,7 +336,7 @@ func TestOneOfDecodeSelectsWireShapeAndPreservesUnmodeledFields(t *testing.T) {
 				t.Fatal("inactive variant claimed fields", fields)
 			}
 			if test.warning {
-				if len(diagnostics) != 0 || !e.Validate(t.Context(), "test", value).HasError() {
+				if len(diagnostics) != 0 || !e.Validate("test", value).HasError() {
 					t.Fatal("stored union should decode cleanly while configuration stays invalid", diagnostics)
 				}
 				return

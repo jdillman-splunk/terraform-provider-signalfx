@@ -261,29 +261,29 @@ import {
 }
 
 func TestResourceObservabilityChartAPIResponses(t *testing.T) {
-	root := template.RootElementChart
-	wrongType := &template.Result{Data: &template.Template{ID: "chart-1", Spec: json.RawMessage(`{"<Chart>":[{"<o11y:TableChart>":[],"chart":{},"datasource":{"program":"A"},"widget":{}}]}`), Metadata: &template.Metadata{RootElement: &root}}}
+	wrongRoot := template.RootElementDashboard
 	for _, test := range []struct {
 		name, method string
 		status       int
 		response     *template.Result
 		want         string
 		removed      bool
-		retainedID   string
 	}{
-		{"create missing endpoint", "POST", 404, nil, "endpoint was not found", false, ""},
-		{"create missing data", "POST", 201, &template.Result{}, "no template record", false, ""},
-		{"create malformed document", "POST", 201, &template.Result{Data: &template.Template{ID: "chart-1", Spec: json.RawMessage(`{}`), Metadata: &template.Metadata{RootElement: &root}}}, "exactly one chart", false, "chart-1"},
-		{"create invalid ID", "POST", 201, &template.Result{Data: &template.Template{ID: "../chart-1"}}, "for Chart", false, ""},
-		{"create wrong chart type", "POST", 201, wrongType, "chart type", false, "chart-1"},
-		{"read deleted", "GET", 404, nil, "", true, ""},
-		{"read failure", "GET", 500, nil, "", false, ""},
-		{"read mismatched ID", "GET", 200, &template.Result{Data: &template.Template{ID: "wrong"}}, "for Chart", false, ""},
-		{"update deleted", "PUT", 404, nil, "not found during update", false, ""},
-		{"update mismatched ID", "PUT", 200, &template.Result{Data: &template.Template{ID: "wrong"}}, "for Chart", false, ""},
-		{"update missing data", "PUT", 200, &template.Result{}, "no template record", false, ""},
-		{"update wrong chart type", "PUT", 200, wrongType, "chart type", false, ""},
-		{"delete already missing", "DELETE", 404, nil, "", false, ""},
+		{"create missing endpoint", "POST", 404, nil, "endpoint was not found", false},
+		{"create missing data", "POST", 201, &template.Result{}, "no template record", false},
+		{"create without returned content", "POST", 201, &template.Result{Data: &template.Template{ID: "chart-1"}}, "", false},
+		{"create invalid ID", "POST", 201, &template.Result{Data: &template.Template{ID: "../chart-1"}}, "for Chart", false},
+		{"read deleted", "GET", 404, nil, "", true},
+		{"read failure", "GET", 500, nil, "", false},
+		{"read mismatched ID", "GET", 200, &template.Result{Data: &template.Template{ID: "wrong"}}, "for Chart", false},
+		{"read missing ID", "GET", 200, &template.Result{Data: &template.Template{}}, "without an ID", false},
+		{"read missing root", "GET", 200, &template.Result{Data: &template.Template{ID: "chart-1", Spec: json.RawMessage(observabilityChartFixture)}}, "Chart root element", false},
+		{"read wrong root", "GET", 200, &template.Result{Data: &template.Template{ID: "chart-1", Spec: json.RawMessage(observabilityChartFixture), Metadata: &template.Metadata{RootElement: &wrongRoot}}}, "Chart root element", false},
+		{"update deleted", "PUT", 404, nil, "not found during update", false},
+		{"update mismatched ID", "PUT", 200, &template.Result{Data: &template.Template{ID: "wrong"}}, "for Chart", false},
+		{"update missing data", "PUT", 200, &template.Result{}, "no template record", false},
+		{"update without returned content", "PUT", 200, &template.Result{Data: &template.Template{ID: "chart-1"}}, "", false},
+		{"delete already missing", "DELETE", 404, nil, "", false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			endpoint := test.method + " /v2/template/{id}"
@@ -316,15 +316,12 @@ func TestResourceObservabilityChartAPIResponses(t *testing.T) {
 				require.False(t, plan.SetAttribute(t.Context(), path.Root("id"), types.StringUnknown()).HasError())
 				response := resource.CreateResponse{State: tfsdk.State{Schema: resourceSchema, Raw: tftypes.NewValue(resourceSchema.Type().TerraformType(t.Context()), nil)}}
 				managed.Create(t.Context(), resource.CreateRequest{Plan: plan}, &response)
-				require.True(t, response.Diagnostics.HasError())
-				details = response.Diagnostics.Errors()[0].Detail()
-				if test.retainedID == "" {
+				require.Equal(t, test.want != "", response.Diagnostics.HasError(), response.Diagnostics)
+				if response.Diagnostics.HasError() {
+					details = response.Diagnostics.Errors()[0].Detail()
 					assert.True(t, response.State.Raw.IsNull())
 				} else {
-					retained, diags := managed.model(t.Context(), response.State)
-					require.False(t, diags.HasError(), diags)
-					assert.Equal(t, test.retainedID, retained.ID.ValueString())
-					assert.True(t, retained.Content.Equal(model.Content), "failed create must preserve planned content")
+					assert.True(t, response.State.Raw.Equal(state.Raw), "create must preserve planned values with the returned ID")
 				}
 			case "GET":
 				response := resource.ReadResponse{State: state}
@@ -336,11 +333,16 @@ func TestResourceObservabilityChartAPIResponses(t *testing.T) {
 					details = response.Diagnostics.Errors()[0].Detail()
 				}
 			case "PUT":
+				require.False(t, plan.SetAttribute(t.Context(), path.Root("title"), types.StringValue("Updated")).HasError())
 				response := resource.UpdateResponse{State: state}
 				managed.Update(t.Context(), resource.UpdateRequest{Plan: plan, State: state}, &response)
-				require.True(t, response.Diagnostics.HasError())
-				assert.True(t, response.State.Raw.Equal(state.Raw), "failed update must preserve prior state")
-				details = response.Diagnostics.Errors()[0].Detail()
+				require.Equal(t, test.want != "", response.Diagnostics.HasError(), response.Diagnostics)
+				if response.Diagnostics.HasError() {
+					assert.True(t, response.State.Raw.Equal(state.Raw), "failed update must preserve prior state")
+					details = response.Diagnostics.Errors()[0].Detail()
+				} else {
+					assert.True(t, response.State.Raw.Equal(plan.Raw), "update must preserve planned values")
+				}
 			case "DELETE":
 				response := resource.DeleteResponse{State: state}
 				managed.Delete(t.Context(), resource.DeleteRequest{State: state}, &response)
