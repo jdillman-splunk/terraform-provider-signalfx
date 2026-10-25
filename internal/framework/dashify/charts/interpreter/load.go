@@ -44,11 +44,11 @@ func load(files fs.FS) (*Engine, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", name, err)
 		}
-		var definition definition
-		if err := node.Decode(&definition); err != nil {
+		var chart definition
+		if err := node.Decode(&chart); err != nil {
 			return nil, fmt.Errorf("%s: %w", name, err)
 		}
-		definitions = append(definitions, definition)
+		definitions = append(definitions, chart)
 	}
 	return newEngine(definitions)
 }

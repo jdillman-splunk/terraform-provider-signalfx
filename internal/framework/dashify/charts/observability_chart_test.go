@@ -129,7 +129,7 @@ func TestObservabilityChartReadsConfigurationViolations(t *testing.T) {
 			require.False(t, diags.HasError(), diags)
 			assert.Empty(t, diags.Warnings(), "decoding alone must not apply configuration rules")
 			assert.Equal(t, "chart-1", model.ID.ValueString())
-			warnings := managed.ruleWarning(t.Context(), model)
+			warnings := managed.ruleWarning(model)
 			require.Len(t, warnings, 1)
 			assert.Equal(t, "Stored chart violates configuration rules", warnings[0].Summary())
 			for _, want := range test.want {

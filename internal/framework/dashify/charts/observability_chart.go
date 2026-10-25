@@ -124,7 +124,7 @@ func (r *observabilityChartResource) modelFromRecord(ctx context.Context, record
 
 // Read reports server values outside the configuration rules as one warning.
 // Write responses skip this because state comes from the validated plan.
-func (r *observabilityChartResource) ruleWarning(ctx context.Context, model observabilityChartModel) diag.Diagnostics {
+func (r *observabilityChartResource) ruleWarning(model observabilityChartModel) diag.Diagnostics {
 	violations := r.engine.Validate(model.Name, model.Content)
 	if len(violations) == 0 {
 		return nil
