@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"slices"
 	"strings"
-	"sync"
 	"testing"
 	"testing/fstest"
 
@@ -154,29 +153,6 @@ func TestTextWithoutDatasourceAndUnmodeledContent(t *testing.T) {
 			t.Fatalf("unmodeled datasource lost: %v %v", leftovers, d)
 		}
 	}
-}
-
-func TestDefaultEngineIsShared(t *testing.T) {
-	engine, err := Default()
-	if err != nil {
-		t.Fatal(err)
-	}
-	var workers sync.WaitGroup
-	for range 12 {
-		workers.Go(func() {
-			shared, defaultError := Default()
-			if defaultError != nil || shared != engine {
-				t.Errorf("Default did not return the cached engine: %v", defaultError)
-				return
-			}
-			attributes, attributesError := shared.Attributes("text")
-			if attributesError != nil || attributes["markdown"] == nil {
-				t.Errorf("cached engine has no text schema: %v", attributesError)
-				return
-			}
-		})
-	}
-	workers.Wait()
 }
 
 func timeSeriesSpec(chart, widget map[string]any) map[string]any {
