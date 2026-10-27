@@ -5,7 +5,7 @@ package interpreter
 
 import (
 	"encoding/json"
-	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewChartDiscoveryAndExplicitOverlay(t *testing.T) {
@@ -125,9 +126,8 @@ func TestTextWithoutDatasourceAndUnmodeledContent(t *testing.T) {
 		t.Fatalf("text import without datasource failed: %v %v", leftovers, d)
 	}
 	encoded, d := engine.Encode(t.Context(), "text", value)
-	if d.HasError() || !reflect.DeepEqual(encoded, spec) {
-		t.Fatalf("text round trip changed: %#v %v", encoded, d)
-	}
+	require.False(t, d.HasError(), d)
+	require.Equal(t, spec, encoded, "text round trip changed")
 	for _, group := range []string{"chart", "widget"} {
 		for _, malformed := range []any{nil, "invalid", []any{}} {
 			invalid := jsonSpec(t, spec)
@@ -150,7 +150,7 @@ func TestTextWithoutDatasourceAndUnmodeledContent(t *testing.T) {
 		if len(extra) > 0 {
 			want += ".program"
 		}
-		if d.HasError() || !reflect.DeepEqual(leftovers, []string{want}) {
+		if d.HasError() || !slices.Equal(leftovers, []string{want}) {
 			t.Fatalf("unmodeled datasource lost: %v %v", leftovers, d)
 		}
 	}
@@ -218,7 +218,7 @@ func TestTimeSeriesLegacyFieldsRemainUnmodeled(t *testing.T) {
 		},
 	}, map[string]any{})
 	value, leftovers, diagnostics := engine.Decode(t.Context(), "metrics_time_series", jsonSpec(t, spec), types.ObjectNull(nil))
-	if diagnostics.HasError() || !reflect.DeepEqual(leftovers, []string{"chart.chartOptions.axisPrecision", "chart.seriesOptions.A.precision", "chart.seriesOptions.A.valueUnit"}) {
+	if diagnostics.HasError() || !slices.Equal(leftovers, []string{"chart.chartOptions.axisPrecision", "chart.seriesOptions.A.precision", "chart.seriesOptions.A.valueUnit"}) {
 		t.Fatal(leftovers, diagnostics)
 	}
 	rebuilt, diagnostics := engine.Encode(t.Context(), "metrics_time_series", value)
@@ -228,9 +228,8 @@ func TestTimeSeriesLegacyFieldsRemainUnmodeled(t *testing.T) {
 			"A": map[string]any{"maximumSignificantDigits": int64(4), "displayUnit": "Byte"},
 		},
 	}
-	if diagnostics.HasError() || !reflect.DeepEqual(rebuilt["chart"], want) {
-		t.Fatal("modern values changed", rebuilt, diagnostics)
-	}
+	require.False(t, diagnostics.HasError(), diagnostics)
+	require.Equal(t, want, rebuilt["chart"], "modern values changed")
 }
 
 func TestTimeSeriesRejectsMalformedParentsAndUnsupportedDurations(t *testing.T) {
@@ -283,7 +282,7 @@ func TestTimeSeriesReportsNestedLeftoversAtOriginalPaths(t *testing.T) {
 	spec["datasource"].(map[string]any)["time"] = map[string]any{"type": "relative", "range": int64(3600000), "rangeEnd": int64(0), "futureTime": []any{}}
 	value, leftovers, diagnostics := engine.Decode(t.Context(), "metrics_time_series", jsonSpec(t, spec), types.ObjectNull(nil))
 	want := []string{"chart.seriesOptions.A.displayUnit.futureUnit", "chart.unknownArray.0", "chart.unknownArray.1", "chart.unknownArray.2", "chart.unknownArray.3.nested", "chart.yAxes.1.width", "datasource.time.futureTime", "widget.links.0.futureLink"}
-	if diagnostics.HasError() || !reflect.DeepEqual(leftovers, want) {
+	if diagnostics.HasError() || !slices.Equal(leftovers, want) {
 		t.Fatal("nested ownership paths changed", leftovers, diagnostics)
 	}
 	rebuilt, diagnostics := engine.Encode(t.Context(), "metrics_time_series", value)
@@ -292,7 +291,6 @@ func TestTimeSeriesReportsNestedLeftoversAtOriginalPaths(t *testing.T) {
 		"yAxes":         []any{map[string]any{"min": 0.125}, map[string]any{"max": 99.5}},
 	}, map[string]any{"links": []any{map[string]any{"url": "/service"}}})
 	wantSpec["datasource"].(map[string]any)["time"] = map[string]any{"type": "relative", "range": int64(3600000), "rangeEnd": int64(0)}
-	if diagnostics.HasError() || !reflect.DeepEqual(rebuilt, wantSpec) {
-		t.Fatal("modeled nested fields did not survive the read", rebuilt, diagnostics)
-	}
+	require.False(t, diagnostics.HasError(), diagnostics)
+	require.Equal(t, wantSpec, rebuilt, "modeled nested fields did not survive the read")
 }

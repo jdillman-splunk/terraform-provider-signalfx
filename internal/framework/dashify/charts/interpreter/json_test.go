@@ -5,7 +5,6 @@ package interpreter
 
 import (
 	"encoding/json"
-	"reflect"
 	"strings"
 	"testing"
 )
@@ -27,7 +26,8 @@ func TestDecodeObjectPreservesNumbersAndRequiresObject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if object["large"] != json.Number("9007199254740993") || !reflect.DeepEqual(object["empty"], []any{}) {
+	empty, ok := object["empty"].([]any)
+	if object["large"] != json.Number("9007199254740993") || !ok || empty == nil || len(empty) != 0 {
 		t.Fatalf("lost numeric or empty array semantics: %#v", object)
 	}
 	wire, err := json.Marshal(object)

@@ -7,12 +7,12 @@ import (
 	"context"
 	"encoding/json"
 	"math"
-	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
+	"github.com/stretchr/testify/require"
 )
 
 func testProperty(kind string, path ...string) property {
@@ -150,9 +150,7 @@ func TestTableGroupingDecodesCurrentArrays(t *testing.T) {
 			if diagnostics.HasError() {
 				t.Fatal(diagnostics)
 			}
-			if got := encoded["chart"].(map[string]any)["groupBy"].([]any); !reflect.DeepEqual(got, test.wantWire) {
-				t.Fatalf("encoded grouping %v, want %v", got, test.wantWire)
-			}
+			require.Equal(t, test.wantWire, encoded["chart"].(map[string]any)["groupBy"].([]any), "encoded grouping changed")
 		})
 	}
 	tooMany := map[string]any{
@@ -328,9 +326,8 @@ func TestOneOfDecodeSelectsWireShapeAndPreservesUnmodeledFields(t *testing.T) {
 				}
 				return
 			}
-			if diagnostics.HasError() || !reflect.DeepEqual(leftovers, test.leftovers) {
-				t.Fatal("incorrect union import", leftovers, diagnostics)
-			}
+			require.False(t, diagnostics.HasError(), diagnostics)
+			require.Equal(t, test.leftovers, leftovers, "incorrect union import")
 			fields := value.Attributes()["choice"].(types.Object).Attributes()
 			if !fields["unit"].Equal(test.unit) || !fields["prefix"].Equal(test.prefix) {
 				t.Fatal("inactive variant claimed fields", fields)
@@ -342,9 +339,8 @@ func TestOneOfDecodeSelectsWireShapeAndPreservesUnmodeledFields(t *testing.T) {
 				return
 			}
 			rebuilt, diagnostics := e.Encode(t.Context(), "test", value)
-			if diagnostics.HasError() || !reflect.DeepEqual(rebuilt["chart"].(map[string]any)["choice"], test.rebuilt) {
-				t.Fatal("incorrect union reconstruction", rebuilt, diagnostics)
-			}
+			require.False(t, diagnostics.HasError(), diagnostics)
+			require.Equal(t, test.rebuilt, rebuilt["chart"].(map[string]any)["choice"], "incorrect union reconstruction")
 		})
 	}
 }
